@@ -31,7 +31,7 @@ const DEMO=window.DDP_DEMO||{projects:{},people:{}};
 const inMemory=()=>localMode||mode==="demo";
 const canEdit=()=>mode==="demo"||canWrite;
 const names=Object.assign({},DEMO.people);
-const view={pid:null,tab:"gevinst"};
+const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""}};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
@@ -145,7 +145,7 @@ function render(){
     +(live&&loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
     +(live&&localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
     +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
-    +`<fieldset class="all" ${canEdit()?"":"disabled"}>`+(view.pid?renderProject():renderOverview())+`</fieldset>`;
+    +(view.pid?fieldset(renderProject()):renderOverview());
   $("#crumb").textContent=view.pid?(P().name||"Uden navn"):"";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
@@ -167,6 +167,41 @@ function setMode(m){
   flushAll();applyMode(m);view.pid=null;setHash();render();
 }
 
+const fieldset=html=>`<fieldset class="all" ${canEdit()?"":"disabled"}>${html}</fieldset>`;
+
+/* katalog: projekter med beskrivelse eller tech stack, filtreret */
+function catalogItems(obj,f){
+  f=f||{};
+  const tech=String(f.tech||"").toLowerCase(),q=String(f.q||"").trim().toLowerCase();
+  return Object.entries(obj||{}).map(([id,p])=>Object.assign({id},p))
+    .filter(p=>{const b=p.build||{};return String(b.summary||"").trim()||stackOf(p).length})
+    .filter(p=>!f.dep||p.department===f.dep)
+    .filter(p=>!tech||stackOf(p).some(t=>t.toLowerCase()===tech))
+    .filter(p=>{if(!q)return true;const b=p.build||{};return [p.name,p.department,b.summary,b.reusable,b.learnings].concat(stackOf(p)).some(x=>String(x||"").toLowerCase().includes(q))})
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+}
+function renderCatalog(){
+  const all=catalogItems(projects,{}),items=catalogItems(projects,view.filter),f=view.filter;
+  const deps=[...new Set(all.map(p=>p.department).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da"));
+  const techs=allStackTags(Object.fromEntries(all.map(p=>[p.id,p])));
+  const opt=(v,l,cur)=>`<option value="${esc(v)}" ${cur===v?"selected":""}>${esc(l)}</option>`;
+  const filters=`<div class="cat-filters">
+      <select data-k="filter.dep" aria-label="Afdeling">${opt("","Alle afdelinger",f.dep)}${deps.map(d=>opt(d,d,f.dep)).join("")}</select>
+      <select data-k="filter.tech" aria-label="Teknologi">${opt("","Alle teknologier",f.tech)}${techs.map(t=>opt(t,t,f.tech)).join("")}</select>
+      <input type="search" data-k="filter.q" value="${esc(f.q)}" placeholder="Søg i værktøjer, læring og genbrug" aria-label="Søg">
+    </div>`;
+  const cards=items.map(p=>{const [st,cls]=status(p),b=p.build||{},stack=stackOf(p);
+    return `<button class="cat-card" type="button" data-act="open-build" data-id="${p.id}">
+      <div class="cat-top"><span class="name">${esc(p.name||"Uden navn")}</span><span class="pill ${cls}">${st}</span></div>
+      <div class="small muted">${esc(p.department||"Ingen afdeling")}</div>
+      ${b.summary?`<p class="cat-sum">${esc(b.summary)}</p>`:""}
+      ${stack.length?`<div class="tags">${stack.slice(0,5).map(t=>`<span class="tag plain">${esc(t)}</span>`).join("")}${stack.length>5?`<span class="small muted">+${stack.length-5}</span>`:""}</div>`:""}
+      ${b.reusable?`<div class="small"><span class="muted">Genbrugelig:</span> ${esc(b.reusable)}</div>`:""}
+    </button>`}).join("");
+  if(!all.length)return `<p class="empty">Der er ingen dokumenterede værktøjer endnu. Udfyld fanen Sådan er det bygget i et projekt, så det kommer med her.</p>`;
+  return filters+(items.length?`<div class="cat-grid">${cards}</div>`:`<p class="empty">Ingen værktøjer matcher filtrene.</p>`);
+}
+
 function renderOverview(){
   const list=Object.entries(projects).map(([id,p])=>Object.assign({id},p)).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
   const rows=list.map(p=>{
@@ -183,7 +218,8 @@ function renderOverview(){
       <div><h1>Interne udviklingsprojekter</h1><p class="muted" style="max-width:62ch;margin:0">Planlæg hvert projekt ud fra, hvad det skal give, test de antagelser det hviler på, og beslut ved hver milepæl om det skal fortsætte, justeres eller stoppes.</p></div>
       <div class="row-actions">${list.length?`<button class="btn" data-act="export-json" type="button">Eksportér alle data</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button>`:""}</div>
     </div>
-    <div class="panel" style="margin-top:22px">
+    <nav class="hometabs" role="tablist">${[["projekter","Projekter",list.length],["katalog","Værktøjskatalog",catalogItems(projects,{}).length]].map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${view.home===k}" data-act="home-tab" data-home="${k}">${l} <span class="muted">(${n})</span></button>`).join("")}</nav>
+    ${view.home==="katalog"?renderCatalog():`${fieldset(`<div class="panel" style="margin-top:22px">
       <h2>Nyt projekt</h2><p class="muted small">Et projekt er en idé til et internt værktøj fra en afdeling.</p>
       <div class="grid2">
         <div><label class="f" for="np-name">Projektnavn</label><input type="text" id="np-name" placeholder="Fx automatisk lagerrapport"></div>
@@ -191,9 +227,9 @@ function renderOverview(){
       </div>
       <div style="margin-top:14px"><label class="f" for="np-desc">Hvilket problem skal værktøjet løse?</label><textarea id="np-desc" rows="2"></textarea></div>
       <div style="margin-top:14px"><button class="btn primary" data-act="create" type="button">Opret projekt</button></div>
-    </div>
+    </div>`)}
     ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
-      :`<p class="empty">Der er ingen projekter endnu. Opret det første ovenfor.</p>`}`;
+      :`<p class="empty">Der er ingen projekter endnu. Opret det første ovenfor.</p>`}`}`;
 }
 
 function renderProject(){
@@ -405,7 +441,12 @@ function patchFromKey(k,v){
   return null;
 }
 function onField(e){
-  const el=e.target;const k=el.dataset&&el.dataset.k;if(!k||!view.pid)return;
+  const el=e.target;const k=el.dataset&&el.dataset.k;
+  if(k&&k.startsWith("filter.")){
+    if(e.type==="input"&&el.tagName==="SELECT")return;
+    view.filter[k.slice(7)]=el.value;render();return;
+  }
+  if(!k||!view.pid)return;
   let v=el.type==="checkbox"?el.checked:el.value;
   if(el.dataset.num&&el.type!=="checkbox")v=v===""?"":Number(v);
   const patch=patchFromKey(k,v);if(!patch)return;
@@ -435,6 +476,8 @@ document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
   const act=b.dataset.act,p=P();
   if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
+  if(act==="home-tab"){view.home=b.dataset.home;setHash();render();return}
+  if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);return}
   if(act==="home"){flushAll();view.pid=null;setHash();render();return}
   if(act==="open"){view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);return}
   if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();return}
@@ -511,7 +554,7 @@ function exportCsv(){
 let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2600)}
 /* hash: [demo-]p-<id>-<fane>; demo-visningen har præfikset "demo" */
 function setHash(){
-  const body=view.pid?`p-${view.pid}-${view.tab}`:"";
+  const body=view.pid?`p-${view.pid}-${view.tab}`:view.home==="katalog"?"katalog":"";
   const h=[mode==="demo"?"demo":"",body].filter(Boolean).join("-");
   if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search);
 }
@@ -520,7 +563,8 @@ function readHashFrom(hash){
   if(/^demo(-|$)/.test(s)){m="demo";s=s.replace(/^demo-?/,"")}
   if(m!==mode){flushAll();applyMode(m)}
   const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|bygget|evaluering))?$/.exec(s);
-  if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}else view.pid=null;
+  if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}
+  else{view.pid=null;view.home=s==="katalog"?"katalog":"projekter"}
 }
 const readHash=()=>readHashFrom(location.hash);
 window.addEventListener("hashchange",()=>{readHash();render()});
@@ -529,7 +573,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,allStackTags,addTag,removeTag,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()}
 };
 

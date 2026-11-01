@@ -115,6 +115,24 @@ test("fanen bygget vises med felterne", () => {
   DDP.setMode("live");
 });
 
+/* Task 4: katalog */
+const CP = {
+  a:{name:"Lager", department:"Indkøb", updatedAt:2, build:{summary:"Rapport", stack:["Python"]}},
+  b:{name:"Tom", department:"HR", updatedAt:3, build:{summary:"  ", stack:[]}},
+  c:{name:"Gammel", department:"Indkøb", updatedAt:1},
+  d:{name:"Tekster", department:"Marketing", updatedAt:4, build:{stack:["Claude API"], learnings:"Brug skabelon"}}
+};
+test("katalog: kun dokumenterede, nyeste først", () => eq(DDP.catalogItems(CP,{}).map(x=>x.id), ["d","a"]));
+test("katalog: filter afdeling", () => eq(DDP.catalogItems(CP,{dep:"Indkøb"}).map(x=>x.id), ["a"]));
+test("katalog: filter teknologi uden hensyn til bogstaver", () => eq(DDP.catalogItems(CP,{tech:"claude api"}).map(x=>x.id), ["d"]));
+test("katalog: fritekst i læring", () => eq(DDP.catalogItems(CP,{q:"skabelon"}).map(x=>x.id), ["d"]));
+test("katalog-fanen og hash", () => {
+  DDP.setMode("live"); DDP.readHashFrom("#demo-katalog"); DDP.render();
+  eq(DDP.state().mode, "demo"); eq(DDP.state().view.home, "katalog");
+  ok(document.getElementById("app").textContent.includes("Værktøjskatalog"));
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>
