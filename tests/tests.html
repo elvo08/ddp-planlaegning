@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="da">
+<head><meta charset="utf-8"><title>DDP-tests</title></head>
+<body>
+<header><span id="crumb"></span><span id="mode"></span><span id="who"></span></header>
+<main><div id="app"></div></main>
+<div id="toast"></div>
+<pre id="results">Kører …</pre>
+
+<script>
+/* ---------- mini-harness ---------- */
+const TESTS=[];
+function test(name,fn){TESTS.push([name,fn])}
+function fmt(v){try{return JSON.stringify(v)}catch(e){return String(v)}}
+function eq(a,b,msg){if(fmt(a)!==fmt(b))throw new Error((msg?msg+": ":"")+"forventede "+fmt(b)+", fik "+fmt(a))}
+function ok(c,msg){if(!c)throw new Error(msg||"forventede sand")}
+const tick=(ms=0)=>new Promise(r=>setTimeout(r,ms));
+const fakeDoc=(id,data)=>({id,data:()=>data});
+
+/* ---------- falsk claude-runtime ---------- */
+window.__writes=[];window.__snap=null;window.__canWrite=true;
+const fakeDb={
+  collection:()=>({
+    onSnapshot:(cb)=>{window.__snap=cb;return()=>{}},
+    doc:id=>({set:async d=>{window.__writes.push({op:"set",path:"projects/"+id,p:d})}})
+  }),
+  doc:path=>({
+    update:async p=>{window.__writes.push({op:"update",path,p})},
+    delete:async()=>{window.__writes.push({op:"delete",path})}
+  })
+};
+const fakeUser={id:async()=>"me",can:async()=>window.__canWrite!==false,me:async()=>({name:"Test"}),profiles:async()=>({})};
+window.claude={use:async n=>n==="db"?fakeDb:n==="user"?fakeUser:null};
+
+async function runAll(){
+  await tick(20);
+  const out=[];let fail=0;
+  for(const [name,fn] of TESTS){
+    try{await fn();out.push("ok   "+name)}
+    catch(e){fail++;out.push("FEJL "+name+" — "+(e&&e.message))}
+  }
+  out.push(fail?`FEJL: ${fail} af ${TESTS.length}`:`ALLE ${TESTS.length} TESTS BESTÅET`);
+  document.getElementById("results").textContent=out.join("\n");
+}
+</script>
+<script src="../src/demo.js"></script>
+<script src="../src/app.js"></script>
+<script>
+/* ---------- tests ---------- */
+test("appen starter i live med database", async () => {
+  await tick();
+  window.__snap({docs:[], size:0, metadata:{fromCache:false}});
+  eq(DDP.state().mode, "live");
+});
+
+runAll();
+</script>
+</body>
+</html>

@@ -442,6 +442,12 @@ function readHash(){const m=/^p-([a-z0-9]+)(?:-(gevinst|antagelser|milepaele|eva
 window.addEventListener("hashchange",()=>{readHash();render()});
 readHash();
 
+/* ---------- test hooks ---------- */
+window.DDP={
+  state:()=>({mode:"live",projects,liveProjects:projects,demoProjects:{},view,canWrite}),
+  render,status,calc
+};
+
 /* ---------- boot ---------- */
 (async function boot(){
   const c=window.claude;

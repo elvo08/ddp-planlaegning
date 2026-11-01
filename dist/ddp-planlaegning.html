@@ -185,6 +185,9 @@ fieldset.all{border:0;margin:0;padding:0;min-width:0}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+window.DDP_DEMO={projects:{},people:{}};
+</script>
+<script>
 (function(){
 "use strict";
 const $=s=>document.querySelector(s);
@@ -628,6 +631,12 @@ function setHash(){const h=view.pid?`p-${view.pid}-${view.tab}`:"";if(location.h
 function readHash(){const m=/^p-([a-z0-9]+)(?:-(gevinst|antagelser|milepaele|evaluering))?$/.exec(location.hash.slice(1));if(m){view.pid=m[1];view.tab=m[2]||"gevinst"}else view.pid=null}
 window.addEventListener("hashchange",()=>{readHash();render()});
 readHash();
+
+/* ---------- test hooks ---------- */
+window.DDP={
+  state:()=>({mode:"live",projects,liveProjects:projects,demoProjects:{},view,canWrite}),
+  render,status,calc
+};
 
 /* ---------- boot ---------- */
 (async function boot(){
