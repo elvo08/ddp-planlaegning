@@ -17,7 +17,7 @@ function ok(c,msg){if(!c)throw new Error(msg||"forventede sand")}
 const tick=(ms=0)=>new Promise(r=>setTimeout(r,ms));
 const fakeDoc=(id,data)=>({id,data:()=>data});
 
-/* ---------- falsk claude-runtime ---------- */
+/* ---------- falsk backend ---------- */
 window.__writes=[];window.__snap=null;window.__canWrite=true;
 const fakeDb={
   collection:()=>({
@@ -30,7 +30,7 @@ const fakeDb={
   })
 };
 const fakeUser={id:async()=>"me",can:async()=>window.__canWrite!==false,me:async()=>({name:"Test"}),profiles:async()=>({})};
-window.claude={use:async n=>n==="db"?fakeDb:n==="user"?fakeUser:null};
+window.DDP_BACKEND={use:async n=>n==="db"?fakeDb:n==="user"?fakeUser:null};
 
 async function runAll(){
   await tick(20);
@@ -189,6 +189,58 @@ test("I4: evalueringen i demo lover ikke at gemme", () => {
   ok(!t.includes("gemmes med det samme"), "ingen løfte om at gemme");
   ok(t.includes("Demo: dine svar gemmes ikke"), "demo-note i panelet");
   DDP.setMode("live");
+});
+
+/* HTTP-backend mod FastAPI */
+async function withFetch(handler, fn){
+  const real = window.fetch, calls = [];
+  window.fetch = async (url, opt) => { calls.push({url, method:(opt&&opt.method)||"GET", body:opt&&opt.body}); return handler(url, opt); };
+  try { await fn(calls); } finally { window.fetch = real; }
+}
+const jsonRes = (data, status=200) => ({ok:status<400, status, json:async()=>data, text:async()=>JSON.stringify(data)});
+test("http: update sender PATCH med JSON", async () => withFetch(() => jsonRes({ok:true}), async calls => {
+  const db = await DDP.httpBackend().use("db");
+  await db.doc("projects/abc").update({name:"X"});
+  const c = calls.find(c => c.method === "PATCH");
+  eq(c.url, "api/projects/abc"); eq(JSON.parse(c.body), {name:"X"});
+}));
+test("http: onSnapshot leverer projekter fra serveren", async () => withFetch(() => jsonRes({p1:{name:"Lager"}}), async () => {
+  const db = await DDP.httpBackend().use("db");
+  let snap = null; const stop = db.collection("projects").onSnapshot(s => { snap = s; });
+  await tick(10); stop();
+  eq(snap.docs.map(d => [d.id, d.data().name]), [["p1","Lager"]]);
+  eq(snap.metadata.fromCache, false);
+}));
+test("http: ingen server giver ingen database", async () => withFetch(() => { throw new TypeError("Failed to fetch"); }, async () => {
+  eq(await DDP.httpBackend().use("db"), null);
+}));
+test("http: netværksfejl ved skrivning giver koden unavailable", async () => withFetch(u => { if (String(u).endsWith("api/projects")) return jsonRes({}); throw new TypeError("x"); }, async () => {
+  const db = await DDP.httpBackend().use("db");
+  let code = null; try { await db.doc("projects/a").update({}); } catch (e) { code = e.code; }
+  eq(code, "unavailable");
+}));
+test("http: navn gemmes på serveren", async () => withFetch(() => jsonRes({ok:true}), async calls => {
+  const u = await DDP.httpBackend().use("user");
+  await u.setName("Mette");
+  const c = calls.find(c => c.method === "PUT");
+  ok(/^api\/users\/[A-Za-z0-9_-]+$/.test(c.url), c.url); eq(JSON.parse(c.body), {name:"Mette"});
+  eq((await u.me()).name, "Mette");
+}));
+
+test("navn: spørger om navn i live, når det mangler, og gemmer det", async () => {
+  const u = Object.assign({}, fakeUser, {setName: async n => { window.__name = n; }});
+  DDP.setMode("live"); DDP.readHashFrom(""); DDP.setUserForTest(u, "");
+  const app = () => document.getElementById("app").textContent;
+  ok(app().includes("Hvad hedder du?"), "spørger om navn");
+  document.getElementById("my-name").value = " Mette ";
+  document.querySelector('[data-act="set-name"]').click(); await tick(); await tick();
+  eq(window.__name, "Mette"); ok(!app().includes("Hvad hedder du?"), "spørger ikke igen");
+  eq(document.getElementById("who").textContent.trim(), "Mette");
+});
+test("navn: spørger ikke i demo", () => {
+  DDP.setUserForTest(Object.assign({}, fakeUser, {setName: async () => {}}), "");
+  DDP.setMode("demo"); ok(!document.getElementById("app").textContent.includes("Hvad hedder du?"));
+  DDP.setUserForTest(fakeUser, "Test"); DDP.setMode("live");
 });
 
 runAll();

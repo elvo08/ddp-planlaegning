@@ -23,6 +23,7 @@ const FQ=[
   ["q4","Var værktøjet let at bruge?"]
 ];
 
+let myName="",askName=false;
 let db=null,userCap=null,dl=null,meId=null,canWrite=true,localMode=false;
 let projects={},loaded=false,loadErr="",staleNote="";
 /* mode: "live" = fælles database, "demo" = opdigtede projekter kun i hukommelsen */
@@ -142,6 +143,8 @@ function render(){
   if(view.pid&&!projects[view.pid]){view.pid=null}
   const live=mode==="live";
   app.innerHTML=(mode==="demo"?`<div class="banner demo">Du ser demodata. Ændringer gemmes ikke.</div>`:"")
+    +(live&&needName()?`<div class="banner name"><label for="my-name">Hvad hedder du? Dit navn vises ved projekter, beslutninger og evalueringer.</label>
+      <div class="row-actions"><input type="text" id="my-name" value="${esc(myName)}" placeholder="Fx Mette, Indkøb" autocomplete="name"><button class="btn primary" type="button" data-act="set-name">Gem navn</button></div></div>`:"")
     +(live&&loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
     +(live&&localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
     +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
@@ -152,6 +155,20 @@ function render(){
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
+}
+
+const needName=()=>!localMode&&!!userCap&&typeof userCap.setName==="function"&&(!myName||askName);
+function renderWho(){
+  const el=$("#who");if(!el)return;
+  el.innerHTML=userCap&&typeof userCap.setName==="function"&&myName
+    ?`<button type="button" class="who" data-act="change-name" title="Skift navn">${esc(myName)}</button>`:esc(myName);
+}
+async function saveName(){
+  const name=($("#my-name")||{}).value?.trim()||"";
+  if(!name){toast("Skriv dit navn.");const i=$("#my-name");if(i)i.focus();return}
+  try{await userCap.setName(name)}catch(e){toast("Navnet kunne ikke gemmes. Prøv igen.");return}
+  myName=name;askName=false;if(meId)names[meId]=name;
+  renderWho();render();toast("Navnet er gemt.");
 }
 
 function renderMode(){
@@ -475,6 +492,8 @@ function addAssumption(p,a){
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
   const act=b.dataset.act,p=P();
+  if(act==="set-name")return saveName();
+  if(act==="change-name"){askName=true;render();const i=$("#my-name");if(i){i.focus();i.select()}return}
   if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
   if(act==="home-tab"){view.home=b.dataset.home;setHash();render();return}
   if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);return}
@@ -574,20 +593,76 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
-  setCanWrite:b=>{canWrite=b;render()}
+  render,status,calc,httpBackend,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
+  setCanWrite:b=>{canWrite=b;render()},
+  setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };
+
+/* ---------- backend: FastAPI-serveren (server/main.py) ---------- */
+/* Samme form som appen bruger internt: use("db"|"user"|"downloads"). Data hentes igen hvert POLL_MS. */
+const POLL_MS=4000;
+function httpBackend(){
+  const store=(()=>{try{return window.localStorage}catch(e){return null}})();
+  const get=k=>{try{return store&&store.getItem(k)}catch(e){return null}};
+  const put=(k,v)=>{try{store&&store.setItem(k,v)}catch(e){}};
+  let uid=get("ddp-user-id");if(!uid){uid="u"+newId();put("ddp-user-id",uid)}
+  let refresh=()=>{};
+  async function call(method,url,body){
+    let r;
+    try{r=await fetch(url,{method,headers:body!==undefined?{"Content-Type":"application/json"}:{},body:body!==undefined?JSON.stringify(body):undefined})}
+    catch(e){throw {code:"unavailable"}}
+    if(!r.ok)throw {code:r.status===404?"not_found":r.status===422?"invalid_argument":"unavailable"};
+    const out=await r.json();if(method!=="GET")refresh();return out;
+  }
+  const db={
+    collection:()=>({
+      doc:id=>({set:d=>call("PUT","api/projects/"+id,d)}),
+      onSnapshot(cb,err){
+        let last=null,stopped=false,timer=null,first=true;
+        async function poll(){
+          clearTimeout(timer);
+          try{
+            const data=await call("GET","api/projects"),txt=JSON.stringify(data);
+            if(!stopped&&txt!==last){last=txt;cb({docs:Object.entries(data).map(([id,d])=>({id,data:()=>d})),size:Object.keys(data).length,metadata:{fromCache:false}})}
+          }catch(e){if(first&&err)err(e)}
+          first=false;
+          if(!stopped)timer=setTimeout(poll,POLL_MS);
+        }
+        refresh=()=>{if(!stopped)poll()};
+        poll();
+        return ()=>{stopped=true;clearTimeout(timer)};
+      }
+    }),
+    doc:path=>({update:p=>call("PATCH","api/"+path,p),delete:()=>call("DELETE","api/"+path)})
+  };
+  const user={
+    id:async()=>uid,
+    can:async()=>true,
+    me:async()=>({name:get("ddp-user-name")||""}),
+    setName:async name=>{name=String(name||"").trim();put("ddp-user-name",name);await call("PUT","api/users/"+uid,{name})},
+    profiles:async ids=>{const all=await call("GET","api/users");return Object.fromEntries(ids.map(i=>[i,{name:all[i]||""}]))}
+  };
+  const downloads={save:async({filename,data})=>{
+    const a=document.createElement("a");a.href=URL.createObjectURL(data);a.download=filename;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }};
+  return {use:async n=>{
+    if(n==="db"){try{await call("GET","api/projects");return db}catch(e){return null}}
+    return n==="user"?user:n==="downloads"?downloads:null;
+  }};
+}
 
 /* ---------- boot ---------- */
 (async function boot(){
-  const c=window.claude;
+  const c=window.DDP_BACKEND||httpBackend();
   if(!c||typeof c.use!=="function"){localMode=true;loaded=true;if(mode==="live")applyMode("demo");setHash();render();return}
   c.use("downloads").then(x=>{dl=x}).catch(()=>{});
   c.use("user").then(async u=>{
     userCap=u;if(!u)return;
     try{meId=await u.id()}catch(e){}
     try{const w=await u.can("data.write");if(w===false){canWrite=false;render()}}catch(e){}
-    try{const me=await u.me();if(me&&me.name)$("#who").textContent=me.name}catch(e){}
+    try{const me=await u.me();myName=(me&&me.name)||""}catch(e){}
+    renderWho();render();
     resolveNames();
   }).catch(()=>{});
   db=await c.use("db").catch(()=>null);
