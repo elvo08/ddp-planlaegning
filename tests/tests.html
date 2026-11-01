@@ -94,6 +94,27 @@ test("skiftet i toppen viser aktiv visning", () => {
   DDP.setMode("live");
 });
 
+/* Task 3: bygget-fanen og I drift */
+const ms = (dec, at) => ({m1:{decision:dec, decidedAt:at, name:"x"}});
+test("I drift erstatter Fortsætter", () => eq(DDP.status({milestones:ms("fortsaet",1), build:{live:true}}), ["I drift","ok"]));
+test("I drift erstatter ikke Justeres", () => eq(DDP.status({milestones:ms("juster",1), build:{live:true}})[0], "Justeres"));
+test("I drift erstatter ikke Under planlægning", () => eq(DDP.status({build:{live:true}})[0], "Under planlægning"));
+test("projekt uden build virker", () => eq(DDP.status({milestones:ms("fortsaet",1)})[0], "Fortsætter"));
+test("allStackTags samler stavemåder", () => eq(DDP.allStackTags({a:{build:{stack:["Python","Shopify API"]}}, b:{build:{stack:["python"]}}, c:{}}), ["Python","Shopify API"]));
+test("addTag afviser dublet med andre bogstaver", async () => {
+  DDP.setMode("demo"); const id = Object.keys(DDP.state().projects)[0];
+  DDP.addTag(id, "Python"); DDP.addTag(id, " python "); DDP.addTag(id, "");
+  eq(DDP.state().projects[id].build.stack.filter(t=>t.toLowerCase()==="python").length, 1);
+  DDP.removeTag(id, "Python"); ok(!DDP.state().projects[id].build.stack.includes("Python"));
+});
+test("fanen bygget vises med felterne", () => {
+  DDP.setMode("demo"); const id = Object.keys(DDP.state().projects)[0];
+  DDP.readHashFrom("#demo-p-"+id+"-bygget"); DDP.render();
+  const t = document.getElementById("app").textContent;
+  ["Hvad værktøjet gør","Tech stack","Dele andre kan genbruge","Links","Læring og faldgruber","Kontaktperson","Værktøjet er i drift"].forEach(l => ok(t.includes(l), l));
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

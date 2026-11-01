@@ -94,7 +94,24 @@ function status(p){
   const dec=listOf(p.milestones).filter(m=>m.decision&&m.decidedAt).sort((a,b)=>b.decidedAt-a.decidedAt);
   if(!dec.length)return listOf(p.assumptions).length?["I test","acc"]:["Under planlægning",""];
   const d=dec[0].decision;
+  if(d==="fortsaet"&&p.build&&p.build.live)return ["I drift","ok"];
   return d==="stop"?["Stoppet","bad"]:d==="juster"?["Justeres","warn"]:["Fortsætter","ok"];
+}
+const stackOf=p=>(p.build&&Array.isArray(p.build.stack))?p.build.stack:[];
+function allStackTags(obj){
+  const seen=new Map();
+  Object.values(obj||{}).forEach(p=>stackOf(p||{}).forEach(t=>{const k=String(t).toLowerCase();if(!seen.has(k))seen.set(k,t)}));
+  return [...seen.values()].sort((a,b)=>a.localeCompare(b,"da"));
+}
+function addTag(pid,tag){
+  const t=String(tag??"").trim(),p=projects[pid];if(!t||!p)return;
+  const cur=stackOf(p);
+  if(cur.some(x=>x.toLowerCase()===t.toLowerCase()))return;
+  queuePatch(pid,{build:{stack:cur.concat(t)}},0);
+}
+function removeTag(pid,tag){
+  const p=projects[pid];if(!p)return;
+  queuePatch(pid,{build:{stack:stackOf(p).filter(x=>x!==tag)}},0);
 }
 function aNum(p){const m={};listOf(p.assumptions).forEach((a,i)=>m[a.id]="A"+(i+1));return m}
 
@@ -182,8 +199,8 @@ function renderOverview(){
 function renderProject(){
   const p=P();
   const [st,cls]=status(p);
-  const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["evaluering","Evaluering"]];
-  const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,evaluering:tabEval}[view.tab]||tabRev;
+  const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
+  const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,bygget:tabBuild,evaluering:tabEval}[view.tab]||tabRev;
   return `<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:260px">
         <input type="text" data-k="p.name" value="${esc(p.name)}" aria-label="Projektnavn" style="font-size:26px;font-weight:700;border-color:transparent;padding:4px 6px;margin-left:-7px;background:transparent;letter-spacing:-.02em">
@@ -337,6 +354,30 @@ function tabMs(p){
     ${ms.length?cards:`<p class="empty">Ingen milepæle endnu. Standardforløbet går fra kortlægning af arbejdsgangen over prototype og MVP til pilot.</p>`}`;
 }
 
+function tabBuild(p){
+  const b=p.build||{},stack=stackOf(p);
+  const txt=(k,label,rows,ph)=>`<div><label class="f" for="b-${k}">${label}</label><textarea id="b-${k}" data-k="b.${k}" rows="${rows}" placeholder="${ph}">${esc(b[k])}</textarea></div>`;
+  return `<p class="lead">Beskriv hvordan værktøjet er bygget, så andre kan lære af det og genbruge dele, når de skal lave noget lignende.</p>
+  <div class="two">
+    <div class="panel stack">
+      ${txt("summary","Hvad værktøjet gør",3,"Fx henter lagertal fra Shopify hver morgen og lægger en rapport i et delt ark")}
+      <div><label class="f" for="tag-in">Tech stack</label>
+        <div class="tags">${stack.map(t=>`<span class="tag">${esc(t)}<button type="button" data-act="del-tag" data-tag="${esc(t)}" aria-label="Fjern ${esc(t)}">×</button></span>`).join("")}</div>
+        <div style="display:flex;gap:6px"><input type="text" id="tag-in" data-tagin="1" list="tag-list" placeholder="Fx Python, Shopify API, Claude API" autocomplete="off">
+          <button class="btn" type="button" data-act="add-tag">Tilføj</button></div>
+        <datalist id="tag-list">${allStackTags(projects).filter(t=>!stack.some(x=>x.toLowerCase()===t.toLowerCase())).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+        <p class="small muted" style="margin:6px 0 0">Tryk Enter eller komma for at tilføje.</p></div>
+      <label class="check"><input type="checkbox" data-k="b.live" ${b.live?"checked":""}><span>Værktøjet er i drift</span></label>
+    </div>
+    <div class="panel stack">
+      ${txt("reusable","Dele andre kan genbruge",2,"Fx Shopify-udtræk, prompt-skabelon")}
+      ${txt("links","Links",2,"Kode, dokumentation eller demo")}
+      ${txt("learnings","Læring og faldgruber",3,"Hvad skal man vide, hvis man bygger noget lignende?")}
+      <div><label class="f" for="b-contact">Kontaktperson</label><input type="text" id="b-contact" data-k="b.contact" value="${esc(b.contact)}" placeholder="Fx Mette, Indkøb"></div>
+    </div>
+  </div>`;
+}
+
 function tabEval(p){
   const fb=p.feedback||{},mine=(meId&&fb[meId])||{};
   const all=Object.entries(fb).filter(([,v])=>v&&!v.deleted);
@@ -359,6 +400,7 @@ function patchFromKey(k,v){
   if(s[0]==="rev")return {rev:{[s[1]]:v}};
   if(s[0]==="a")return {assumptions:{[s[1]]:{[s[2]]:v}}};
   if(s[0]==="m"){if(s[2]==="tests")return {milestones:{[s[1]]:{tests:{[s[3]]:v}}}};return {milestones:{[s[1]]:{[s[2]]:v}}}}
+  if(s[0]==="b")return {build:{[s[1]]:v}};
   if(s[0]==="f"&&meId)return {feedback:{[meId]:{[s[1]]:v,at:Date.now()}}};
   return null;
 }
@@ -376,6 +418,11 @@ function onField(e){
 }
 document.addEventListener("input",onField);
 document.addEventListener("change",onField);
+document.addEventListener("keydown",e=>{
+  const el=e.target;if(!el.dataset||!el.dataset.tagin||!view.pid)return;
+  if(e.key!=="Enter"&&e.key!==",")return;
+  e.preventDefault();addTag(view.pid,el.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();
+});
 
 function nextOrder(obj){return listOf(obj).reduce((m,x)=>Math.max(m,x.order||0),0)+1}
 function addAssumption(p,a){
@@ -407,6 +454,8 @@ document.addEventListener("click",async e=>{
   if(!p)return;
   if(act==="del-project"){if(!confirm(`Slet "${p.name||"projektet"}" for alle? Det kan ikke fortrydes.`))return;const id=view.pid;view.pid=null;setHash();await deleteProject(id);render();toast("Projektet er slettet.");return}
   if(act==="add-ass"){const id=addAssumption(p,{});render();const t=document.querySelector(`[data-k="a.${id}.text"]`);if(t)t.focus();return}
+  if(act==="add-tag"){const i=$("#tag-in");addTag(view.pid,i.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();return}
+  if(act==="del-tag"){removeTag(view.pid,b.dataset.tag);render();return}
   if(act==="del-ass"){queuePatch(view.pid,{assumptions:{[b.dataset.id]:{deleted:true}}},0);render();return}
   if(act==="suggest-ass"){
     const c=calc(rev(p));
@@ -445,6 +494,7 @@ function exportJson(){
     gevinstregnskab:Object.assign({},rev(p),{beregnet:calc(rev(p))}),
     antagelser:listOf(p.assumptions).map((a,i)=>({nr:"A"+(i+1),tekst:a.text,kategori:CATS[a.cat]||a.cat,betydning:LVL[a.impact||2],usikkerhed:LVL[a.uncertainty||2],forventet:a.expected,faktisk:a.actual,status:STATUS[a.status||"ikke"]})),
     milepaele:msSorted(p).map((m,i)=>({nr:i+1,navn:m.name,dato:m.date,budget_timer:m.budget,beskrivelse:m.desc,tester:listOf(p.assumptions).filter(a=>m.tests&&m.tests[a.id]).map(a=>aNum(p)[a.id]),resultat:m.result,beslutning:DEC[m.decision]||null,begrundelse:m.rationale,besluttet_af:m.decidedBy?nameOf(m.decidedBy):null,besluttet:m.decidedAt?new Date(m.decidedAt).toISOString():null})),
+    bygget:{beskrivelse:(p.build||{}).summary||"",tech_stack:stackOf(p),genbrug:(p.build||{}).reusable||"",links:(p.build||{}).links||"",laering:(p.build||{}).learnings||"",kontakt:(p.build||{}).contact||"",i_drift:!!(p.build||{}).live},
     evaluering:Object.entries(p.feedback||{}).map(([uid,v])=>({deltager:nameOf(uid),q1:v.q1,q2:v.q2,q3:v.q3,q4:v.q4,kommentar:v.comment}))
   }));
   save("ddp-projekter.json",JSON.stringify({eksporteret:new Date().toISOString(),spoergsmaal:Object.fromEntries(FQ),projekter:out},null,2),"application/json");
@@ -469,7 +519,7 @@ function readHashFrom(hash){
   let s=String(hash||"").replace(/^#/,""),m="live";
   if(/^demo(-|$)/.test(s)){m="demo";s=s.replace(/^demo-?/,"")}
   if(m!==mode){flushAll();applyMode(m)}
-  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|evaluering))?$/.exec(s);
+  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|bygget|evaluering))?$/.exec(s);
   if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}else view.pid=null;
 }
 const readHash=()=>readHashFrom(location.hash);
@@ -479,7 +529,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,allStackTags,addTag,removeTag,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()}
 };
 
