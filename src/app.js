@@ -62,7 +62,7 @@ window.addEventListener("pagehide",flushAll);
 async function createProject(data){
   const id=newId();
   if(inMemory()){projects[id]=data;return id}
-  try{await db.collection("projects").doc(id).set(data);projects[id]=projects[id]||data;return id}
+  try{await db.collection("projects").doc(id).set(data);liveProjects[id]=liveProjects[id]||data;return id}
   catch(e){toast(e&&e.code==="quota_exceeded"?"Databasen er fuld.":"Projektet kunne ikke oprettes.");return null}
 }
 async function deleteProject(id){
@@ -145,7 +145,7 @@ function render(){
     +(live&&loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
     +(live&&localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
     +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
-    +(view.pid?fieldset(renderProject()):renderOverview());
+    +(view.pid?renderProject():renderOverview());
   $("#crumb").textContent=view.pid?(P().name||"Uden navn"):"";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
@@ -164,7 +164,7 @@ function applyMode(m){
   projects=m==="demo"?demoProjects:liveProjects;
 }
 function setMode(m){
-  flushAll();applyMode(m);view.pid=null;setHash();render();
+  flushAll();applyMode(m);view.pid=null;view.home="projekter";view.filter={dep:"",tech:"",q:""};setHash();render();
 }
 
 const fieldset=html=>`<fieldset class="all" ${canEdit()?"":"disabled"}>${html}</fieldset>`;
@@ -237,7 +237,7 @@ function renderProject(){
   const [st,cls]=status(p);
   const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
   const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,bygget:tabBuild,evaluering:tabEval}[view.tab]||tabRev;
-  return `<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
+  return fieldset(`<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:260px">
         <input type="text" data-k="p.name" value="${esc(p.name)}" aria-label="Projektnavn" style="font-size:26px;font-weight:700;border-color:transparent;padding:4px 6px;margin-left:-7px;background:transparent;letter-spacing:-.02em">
         <div class="row-actions small muted" style="margin-top:4px"><span class="pill ${cls}">${st}</span>
@@ -247,8 +247,8 @@ function renderProject(){
       <button class="btn ghost danger" data-act="del-project" type="button">Slet projekt</button>
     </div>
     <div style="margin-top:12px;max-width:760px"><label class="f" for="p-desc">Problemet værktøjet skal løse</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
-    <nav class="steps" role="tablist">${tabs.map(([k,l],i)=>`<button class="step" role="tab" type="button" aria-selected="${view.tab===k}" data-act="tab" data-tab="${k}"><b>${i+1}</b>${l}</button>`).join("")}</nav>
-    ${body(p)}`;
+    `)+`<nav class="steps" role="tablist">${tabs.map(([k,l],i)=>`<button class="step" role="tab" type="button" aria-selected="${view.tab===k}" data-act="tab" data-tab="${k}"><b>${i+1}</b>${l}</button>`).join("")}</nav>
+    `+fieldset(body(p));
 }
 
 function numField(k,label,val,unit){
@@ -418,7 +418,7 @@ function tabEval(p){
   const fb=p.feedback||{},mine=(meId&&fb[meId])||{};
   const all=Object.entries(fb).filter(([,v])=>v&&!v.deleted);
   const avg=q=>{const vs=all.map(([,v])=>Number(v[q])).filter(v=>v>=1);return vs.length?nf1.format(vs.reduce((s,v)=>s+v,0)/vs.length):"–"};
-  const form=meId?`<div class="panel"><h3>Din vurdering af metoden</h3><p class="small muted">1 betyder slet ikke, 5 betyder i høj grad. Dine svar gemmes med det samme og kan ses af andre med adgang til værktøjet.</p>
+  const form=meId?`<div class="panel"><h3>Din vurdering af metoden</h3><p class="small muted">1 betyder slet ikke, 5 betyder i høj grad. ${mode==="demo"?"Demo: dine svar gemmes ikke og indgår ikke i evalueringen.":"Dine svar gemmes med det samme og kan ses af andre med adgang til værktøjet."}</p>
     ${FQ.map(([q,t])=>`<div class="lik"><span>${t}</span><div class="opts" role="radiogroup" aria-label="${esc(t)}">${[1,2,3,4,5].map(v=>`<label><input type="radio" name="fb-${q}" value="${v}" data-k="f.${q}" data-num="1" ${Number(mine[q])===v?"checked":""}><span>${v}</span></label>`).join("")}</div></div>`).join("")}
     <div style="margin-top:14px"><label class="f" for="fb-c">Hvad ville du ændre ved metoden eller værktøjet?</label><textarea id="fb-c" data-k="f.comment" rows="3">${esc(mine.comment)}</textarea></div>
   </div>`:`<div class="banner info">Log ind for at give din vurdering.</div>`;
@@ -489,13 +489,14 @@ document.addEventListener("click",async e=>{
     if(!name){$("#np-name").focus();toast("Giv projektet et navn.");return}
     b.disabled=true;
     const now=Date.now();
+    const m0=mode;
     const id=await createProject({name,department:$("#np-dep").value.trim(),description:$("#np-desc").value.trim(),createdBy:meId||null,createdAt:now,updatedAt:now,rev:Object.assign({},REV_DEFAULT),assumptions:{},milestones:{},feedback:{}});
     b.disabled=false;
-    if(id){view.pid=id;view.tab="gevinst";setHash();render();window.scrollTo(0,0)}
+    if(id&&mode===m0){view.pid=id;view.tab="gevinst";setHash();render();window.scrollTo(0,0)}
     return;
   }
   if(!p)return;
-  if(act==="del-project"){if(!confirm(`Slet "${p.name||"projektet"}" for alle? Det kan ikke fortrydes.`))return;const id=view.pid;view.pid=null;setHash();await deleteProject(id);render();toast("Projektet er slettet.");return}
+  if(act==="del-project"){if(!confirm(mode==="demo"?`Slet "${p.name||"projektet"}" fra demoen? Det kommer tilbage, når siden genindlæses.`:`Slet "${p.name||"projektet"}" for alle? Det kan ikke fortrydes.`))return;const id=view.pid;view.pid=null;setHash();await deleteProject(id);render();toast("Projektet er slettet.");return}
   if(act==="add-ass"){const id=addAssumption(p,{});render();const t=document.querySelector(`[data-k="a.${id}.text"]`);if(t)t.focus();return}
   if(act==="add-tag"){const i=$("#tag-in");addTag(view.pid,i.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();return}
   if(act==="del-tag"){removeTag(view.pid,b.dataset.tag);render();return}

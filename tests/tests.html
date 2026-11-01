@@ -158,6 +158,39 @@ test("forsiden viser projektlisten før Nyt projekt", () => {
   DDP.setMode("live");
 });
 
+/* Final review */
+test("I1: oprettelse i live og skift til demo blander ikke data", async () => {
+  DDP.setMode("live"); DDP.readHashFrom(""); DDP.render();
+  document.getElementById("np-name").value = "Rigtigt";
+  document.querySelector('[data-act="create"]').click();
+  DDP.setMode("demo"); await tick(); await tick();
+  eq(DDP.state().mode, "demo"); eq(DDP.state().view.pid, null, "projektet åbnes ikke i demo");
+  ok(!Object.values(DDP.state().projects).some(p => p.name === "Rigtigt"), "ikke i demolisten");
+  ok(Object.values(DDP.state().liveProjects).some(p => p.name === "Rigtigt"), "findes i live");
+  DDP.setMode("live");
+});
+test("I2: filtre nulstilles ved skift af visning", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo-katalog");
+  DDP.state().view.filter.dep = "Indkøb";
+  DDP.setMode("live");
+  eq(DDP.state().view.filter, {dep:"", tech:"", q:""});
+  eq(DDP.state().view.home, "projekter");
+});
+test("I3: læseadgang kan skifte fane i et projekt", () => {
+  DDP.setMode("live");
+  window.__snap({docs:[fakeDoc("l3",{name:"Læs", rev:{}, assumptions:{}, milestones:{}, feedback:{}})], size:1, metadata:{fromCache:false}});
+  DDP.setCanWrite(false); DDP.readHashFrom("#p-l3-bygget"); DDP.render();
+  ok(!document.querySelector('[data-act="tab"]').matches(":disabled"), "fanen er ikke deaktiveret");
+  DDP.setCanWrite(true); DDP.readHashFrom(""); DDP.render();
+});
+test("I4: evalueringen i demo lover ikke at gemme", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo-p-demo-lager-evaluering"); DDP.render();
+  const t = document.getElementById("app").textContent;
+  ok(!t.includes("gemmes med det samme"), "ingen løfte om at gemme");
+  ok(t.includes("Demo: dine svar gemmes ikke"), "demo-note i panelet");
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>
