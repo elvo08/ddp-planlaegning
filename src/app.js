@@ -25,13 +25,18 @@ const FQ=[
 
 let db=null,userCap=null,dl=null,meId=null,canWrite=true,localMode=false;
 let projects={},loaded=false,loadErr="",staleNote="";
-const names={};
+/* mode: "live" = fælles database, "demo" = opdigtede projekter kun i hukommelsen */
+let mode="live",liveProjects=projects,demoProjects=null;
+const DEMO=window.DDP_DEMO||{projects:{},people:{}};
+const inMemory=()=>localMode||mode==="demo";
+const canEdit=()=>mode==="demo"||canWrite;
+const names=Object.assign({},DEMO.people);
 const view={pid:null,tab:"gevinst"};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
 function queuePatch(id,patch,delay=600){
-  if(!canWrite)return;
+  if(!canEdit())return;
   pend[id]=deepMerge(pend[id]||{},clone(patch));
   if(projects[id])deepMerge(projects[id],clone(patch));
   clearTimeout(timers[id]);
@@ -40,7 +45,7 @@ function queuePatch(id,patch,delay=600){
 function flush(id){
   const p=pend[id];if(!p)return;delete pend[id];
   p.updatedAt=Date.now();
-  if(localMode){if(projects[id])projects[id].updatedAt=p.updatedAt;return}
+  if(inMemory()){if(projects[id])projects[id].updatedAt=p.updatedAt;return}
   chains[id]=(chains[id]||Promise.resolve()).then(()=>doUpdate(id,p,true));
 }
 async function doUpdate(id,p,retry){
@@ -56,12 +61,12 @@ window.addEventListener("pagehide",flushAll);
 
 async function createProject(data){
   const id=newId();
-  if(localMode){projects[id]=data;return id}
+  if(inMemory()){projects[id]=data;return id}
   try{await db.collection("projects").doc(id).set(data);projects[id]=projects[id]||data;return id}
   catch(e){toast(e&&e.code==="quota_exceeded"?"Databasen er fuld.":"Projektet kunne ikke oprettes.");return null}
 }
 async function deleteProject(id){
-  if(localMode){delete projects[id];return}
+  if(inMemory()){delete projects[id];return}
   try{await db.doc("projects/"+id).delete();delete projects[id]}catch(e){toast("Projektet kunne ikke slettes.")}
 }
 
@@ -115,18 +120,34 @@ function render(){
   const val=key&&a.type!=="checkbox"&&a.type!=="radio"?a.value:null;
   const sy=window.scrollY;
   const app=$("#app");
-  if(!loaded&&!localMode){app.innerHTML=`<p class="muted">Indlæser projekter …</p>${staleNote?`<div class="banner info">${esc(staleNote)}</div>`:""}`;return}
+  renderMode();
+  if(!loaded&&!inMemory()){app.innerHTML=`<p class="muted">Indlæser projekter …</p>${staleNote?`<div class="banner info">${esc(staleNote)}</div>`:""}`;return}
   if(view.pid&&!projects[view.pid]){view.pid=null}
-  app.innerHTML=(loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
-    +(localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
-    +(!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
-    +`<fieldset class="all" ${canWrite?"":"disabled"}>`+(view.pid?renderProject():renderOverview())+`</fieldset>`;
+  const live=mode==="live";
+  app.innerHTML=(mode==="demo"?`<div class="banner demo">Du ser demodata. Ændringer gemmes ikke.</div>`:"")
+    +(live&&loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
+    +(live&&localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
+    +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
+    +`<fieldset class="all" ${canEdit()?"":"disabled"}>`+(view.pid?renderProject():renderOverview())+`</fieldset>`;
   $("#crumb").textContent=view.pid?(P().name||"Uden navn"):"";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
+}
+
+function renderMode(){
+  const el=$("#mode");if(!el)return;
+  el.innerHTML=`<span class="seg" role="group" aria-label="Visning">${[["demo","Demo"],["live","Live"]].map(([k,l])=>`<button type="button" data-act="mode" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</span>`;
+}
+function applyMode(m){
+  mode=m;
+  if(m==="demo"&&!demoProjects)demoProjects=clone(DEMO.projects);
+  projects=m==="demo"?demoProjects:liveProjects;
+}
+function setMode(m){
+  flushAll();applyMode(m);view.pid=null;setHash();render();
 }
 
 function renderOverview(){
@@ -366,12 +387,13 @@ function addAssumption(p,a){
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
   const act=b.dataset.act,p=P();
+  if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
   if(act==="home"){flushAll();view.pid=null;setHash();render();return}
   if(act==="open"){view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);return}
   if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();return}
   if(act==="export-json")return exportJson();
   if(act==="export-csv")return exportCsv();
-  if(!canWrite)return;
+  if(!canEdit())return;
   if(act==="create"){
     const name=$("#np-name").value.trim();
     if(!name){$("#np-name").focus();toast("Giv projektet et navn.");return}
@@ -437,21 +459,34 @@ function exportCsv(){
 
 /* ---------- misc ---------- */
 let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2600)}
-function setHash(){const h=view.pid?`p-${view.pid}-${view.tab}`:"";if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search)}
-function readHash(){const m=/^p-([a-z0-9]+)(?:-(gevinst|antagelser|milepaele|evaluering))?$/.exec(location.hash.slice(1));if(m){view.pid=m[1];view.tab=m[2]||"gevinst"}else view.pid=null}
+/* hash: [demo-]p-<id>-<fane>; demo-visningen har præfikset "demo" */
+function setHash(){
+  const body=view.pid?`p-${view.pid}-${view.tab}`:"";
+  const h=[mode==="demo"?"demo":"",body].filter(Boolean).join("-");
+  if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search);
+}
+function readHashFrom(hash){
+  let s=String(hash||"").replace(/^#/,""),m="live";
+  if(/^demo(-|$)/.test(s)){m="demo";s=s.replace(/^demo-?/,"")}
+  if(m!==mode){flushAll();applyMode(m)}
+  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|evaluering))?$/.exec(s);
+  if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}else view.pid=null;
+}
+const readHash=()=>readHashFrom(location.hash);
 window.addEventListener("hashchange",()=>{readHash();render()});
 readHash();
 
 /* ---------- test hooks ---------- */
 window.DDP={
-  state:()=>({mode:"live",projects,liveProjects:projects,demoProjects:{},view,canWrite}),
-  render,status,calc
+  state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
+  render,status,calc,setMode,queuePatch,flushAll,readHashFrom,
+  setCanWrite:b=>{canWrite=b;render()}
 };
 
 /* ---------- boot ---------- */
 (async function boot(){
   const c=window.claude;
-  if(!c||typeof c.use!=="function"){localMode=true;loaded=true;render();return}
+  if(!c||typeof c.use!=="function"){localMode=true;loaded=true;if(mode==="live")applyMode("demo");setHash();render();return}
   c.use("downloads").then(x=>{dl=x}).catch(()=>{});
   c.use("user").then(async u=>{
     userCap=u;if(!u)return;
@@ -461,12 +496,12 @@ window.DDP={
     resolveNames();
   }).catch(()=>{});
   db=await c.use("db").catch(()=>null);
-  if(!db){localMode=true;loaded=true;render();return}
+  if(!db){localMode=true;loaded=true;if(mode==="live")applyMode("demo");setHash();render();return}
   const timer=setTimeout(()=>{if(!loaded){staleNote="Projekterne kan ikke hentes endnu. Tjek forbindelsen; siden prøver fortsat.";render()}},10000);
   db.collection("projects").onSnapshot(snap=>{
     const next={};
     snap.docs.forEach(d=>{const data=clone(d.data());if(pend[d.id])deepMerge(data,clone(pend[d.id]));next[d.id]=data});
-    projects=next;
+    liveProjects=next;if(mode==="live")projects=next;
     if(!snap.metadata.fromCache){loaded=true;clearTimeout(timer);staleNote=""}
     else if(!loaded&&snap.size){loaded=true}
     render();resolveNames();

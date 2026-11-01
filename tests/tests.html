@@ -53,6 +53,47 @@ test("appen starter i live med database", async () => {
   eq(DDP.state().mode, "live");
 });
 
+/* Task 2: demo/live */
+test("skift til demo viser demoprojekter og skriver ikke til db", async () => {
+  DDP.setMode("demo");
+  const id = Object.keys(DDP.state().projects)[0];
+  ok(id, "der findes demoprojekter");
+  window.__writes.length = 0;
+  DDP.queuePatch(id, {name:"Ændret"}, 0); DDP.flushAll(); await tick();
+  eq(window.__writes.length, 0, "ingen db-skrivninger i demo");
+  eq(DDP.state().projects[id].name, "Ændret");
+});
+test("ventende live-ændring gemmes før skift til demo", async () => {
+  DDP.setMode("live");
+  window.__snap({docs:[fakeDoc("L1",{name:"Live"})], size:1, metadata:{fromCache:false}});
+  window.__writes.length = 0;
+  DDP.queuePatch("L1", {name:"Live 2"});
+  DDP.setMode("demo"); await tick();
+  eq(window.__writes.length, 1); eq(window.__writes[0].path, "projects/L1");
+  ok(!("L1" in DDP.state().projects), "live-projekt vises ikke i demo");
+});
+test("live-snapshot i demo ændrer ikke det viste", () => {
+  DDP.setMode("demo");
+  window.__snap({docs:[fakeDoc("L2",{name:"Ny"})], size:1, metadata:{fromCache:false}});
+  ok(!("L2" in DDP.state().projects)); ok("L2" in DDP.state().liveProjects);
+});
+test("læseadgang: må redigere i demo, ikke i live", () => {
+  window.__canWrite = false; DDP.setCanWrite(false);
+  DDP.setMode("demo"); eq(document.querySelector("fieldset.all").disabled, false);
+  DDP.setMode("live"); eq(document.querySelector("fieldset.all").disabled, true);
+  DDP.setCanWrite(true); window.__canWrite = true;
+});
+test("#demo i adressen åbner demo", () => { DDP.setMode("live"); DDP.readHashFrom("#demo-katalog"); eq(DDP.state().mode, "demo"); });
+test("banner vises kun i demo", () => {
+  DDP.setMode("demo"); ok(document.getElementById("app").textContent.includes("Du ser demodata. Ændringer gemmes ikke."));
+  DDP.setMode("live"); ok(!document.getElementById("app").textContent.includes("Du ser demodata."));
+});
+test("skiftet i toppen viser aktiv visning", () => {
+  DDP.setMode("demo");
+  eq(document.querySelector('[data-act="mode"][data-mode="demo"]').getAttribute("aria-pressed"), "true");
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

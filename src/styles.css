@@ -60,6 +60,11 @@ fieldset.all{border:0;margin:0;padding:0;min-width:0}
 .banner{padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:16px}
 .banner.info{background:var(--surface-2)}
 .banner.err{background:var(--bad-soft);color:var(--bad)}
+.banner.demo{background:var(--warn-soft);color:var(--warn);font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:5px 14px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink-2)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
 
 /* Overview */
 .proj-list{display:flex;flex-direction:column;border-top:1px solid var(--line);margin-top:20px}
