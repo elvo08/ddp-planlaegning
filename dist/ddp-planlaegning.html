@@ -70,6 +70,11 @@ fieldset.all{border:0;margin:0;padding:0;min-width:0}
 .banner{padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:16px}
 .banner.info{background:var(--surface-2)}
 .banner.err{background:var(--bad-soft);color:var(--bad)}
+.banner.demo{background:var(--warn-soft);color:var(--warn);font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:5px 14px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink-2)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
 
 /* Overview */
 .proj-list{display:flex;flex-direction:column;border-top:1px solid var(--line);margin-top:20px}
@@ -172,6 +177,26 @@ fieldset.all{border:0;margin:0;padding:0;min-width:0}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.tags:empty{display:none}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--surface-2);font-size:13px;font-weight:500}
+.tag button{border:0;background:none;cursor:pointer;color:var(--ink-2);font-size:15px;line-height:1;padding:0 4px;border-radius:999px}
+.tag button:hover{color:var(--bad)}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.hometabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:22px 0 0;overflow-x:auto}
+.hometabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px 12px;cursor:pointer;white-space:nowrap;color:var(--ink-2);font-weight:500;font-size:15px}
+.hometabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.cat-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:10px;margin:22px 0 16px}
+@media (max-width:640px){.cat-filters{grid-template-columns:1fr}}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.cat-card{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;cursor:pointer;width:100%}
+.cat-card:hover{border-color:var(--ink-2)}
+.cat-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.cat-top .name{font-weight:600;font-size:16px}
+.cat-sum{margin:4px 0 2px;font-size:14px;line-height:1.45}
+.cat-card .tags{margin:4px 0 0}
+.tag.plain{padding:3px 10px}
 </style>
 </head>
 <body>
@@ -179,13 +204,208 @@ fieldset.all{border:0;margin:0;padding:0;min-width:0}
   <button class="brand" data-act="home">DDP<span>·</span>planlægning</button>
   <span class="crumb" id="crumb"></span>
   <span class="spacer"></span>
+  <span id="mode"></span>
   <span class="small muted" id="who"></span>
 </div></header>
 <main><div class="wrap" id="app"><p class="muted">Indlæser projekter …</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-window.DDP_DEMO={projects:{},people:{}};
+/* Demodata: opdigtede projekter, der viser værktøjet efter et stykke tid i brug.
+   Indlæses før app.js og bruges kun i demo-visningen. Personer og tal er opdigtede. */
+window.DDP_DEMO=(function(){
+  const ts=d=>new Date(d+"T10:00:00").getTime();
+  const people={
+    "demo-mette":"Mette, Indkøb",
+    "demo-jonas":"Jonas, Kundeservice",
+    "demo-sara":"Sara, Marketing",
+    "demo-anders":"Anders, Økonomi",
+    "demo-kasper":"Kasper, Lager",
+    "demo-line":"Line, HR",
+    "demo-sofie":"Sofie, IT"
+  };
+  /* antagelse: id, tekst, kategori, betydning, usikkerhed, status, forventet, faktisk */
+  const A=(rows)=>Object.fromEntries(rows.map(([id,text,cat,impact,uncertainty,status,expected,actual],i)=>
+    [id,{text,cat,impact,uncertainty,status,expected,actual:actual||"",order:i+1}]));
+  /* milepæl: id, navn, beskrivelse, dato, budget, testede antagelser, resultat, beslutning, begrundelse, af, dato for beslutning */
+  const M=(rows)=>Object.fromEntries(rows.map(([id,name,desc,date,budget,tests,result,decision,rationale,by,at],i)=>
+    [id,{name,desc,date,budget,tests:Object.fromEntries((tests||[]).map(t=>[t,true])),result:result||"",
+      decision:decision||"",rationale:rationale||"",decidedBy:decision?by:null,decidedAt:decision?ts(at):null,order:i+1}]));
+  const F=(q1,q2,q3,q4,comment,at)=>({q1,q2,q3,q4,comment,at:ts(at)});
+
+  const projects={
+    "demo-lager":{
+      name:"Automatisk lagerrapport",department:"Indkøb",
+      description:"Indkøb bruger hver mandag to-tre timer på at trække lagertal ud af Shopify og samle dem i et regneark, før der kan bestilles hjem.",
+      createdBy:"demo-mette",createdAt:ts("2026-03-04"),updatedAt:ts("2026-10-22"),
+      rev:{targetNet:50000,marginPct:50,rate:400,users:3,weeks:46,lifetime:3,devHours:30,oneTime:0,maintHours:2,runMonthly:0},
+      assumptions:A([
+        ["a1","Hver indkøber sparer 1,8 timer om ugen med værktøjet","gevinst",3,3,"holder","1,8 t/uge","2,1 t/uge"],
+        ["a2","3 indkøbere bruger rapporten hver uge","brug",3,2,"holder","3 brugere","3 brugere"],
+        ["a3","Værktøjet kan bygges på 30 timer med AI-assistance","omk",2,3,"delvist","30 timer","38 timer"],
+        ["a4","Shopify-API'et giver de lagertal, vi skal bruge","teknisk",3,2,"holder","Alle varenumre","Alle varenumre"],
+        ["a5","Vedligehold kræver højst 2 timer om måneden","omk",2,2,"holder","2 t/md.","1 t/md."]
+      ]),
+      milestones:M([
+        ["m1","Kortlæg nuværende arbejdsgang","Mål tidsforbruget tre mandage i træk.","2026-03-20",4,["a1"],
+          "Opgaven tog i snit 2,4 timer pr. person pr. uge.","fortsaet","Tidsforbruget er større end antaget, så gevinsten ser realistisk ud.","demo-mette","2026-03-21"],
+        ["m2","Prototype med udtræk fra Shopify","Hent lagertal for alle varer og læg dem i et ark.","2026-04-17",12,["a3","a4"],
+          "Alle data kunne hentes, men API'et begrænser antal kald, så hentningen skulle deles op. Det kostede ekstra tid.","fortsaet","Den tekniske usikkerhed er væk. Overskridelsen af timer er lille i forhold til gevinsten.","demo-sofie","2026-04-20"],
+        ["m3","Pilot i hele indkøbsteamet","Rapporten bruges i fire uger, og tidsforbruget måles igen.","2026-06-12",8,["a1","a2","a5"],
+          "Alle tre indkøbere bruger rapporten. Den målte besparelse er 2,1 timer om ugen pr. person.","fortsaet","Antagelserne holder. Værktøjet sættes i drift.","demo-mette","2026-06-15"]
+      ]),
+      feedback:{
+        "demo-mette":F(5,4,4,4,"Det hjalp at regne baglæns. Vi kunne se, at to timer om ugen var nok til at gøre det umagen værd.","2026-06-20"),
+        "demo-sofie":F(4,5,3,4,"Milepælene gjorde det nemt at stoppe op og tjekke API'et, før vi byggede videre.","2026-06-22")
+      },
+      build:{
+        summary:"Henter lagertal fra Shopify hver mandag kl. 6 og lægger en færdig genbestillingsrapport i et delt Google-ark.",
+        stack:["Python","Shopify API","Google Sheets","Claude Code"],
+        reusable:"Shopify-udtræk (modul der henter varer og lager i bidder), opsætning af planlagt kørsel",
+        links:"Kode: intern Git under indkob/lagerrapport\nVejledning: Indkøbs fælles drev",
+        learnings:"Shopify begrænser antal kald pr. sekund. Hent i bidder på 250 varer og vent mellem kaldene. Byg rapporten sammen med brugerne, de ville have andre kolonner end vi troede.",
+        contact:"Mette, Indkøb (bruger) og Sofie, IT (kode)",
+        live:true
+      }
+    },
+
+    "demo-retur":{
+      name:"Hjælp til returhenvendelser",department:"Kundeservice",
+      description:"Kundeservice får mange ens spørgsmål om returnering. Et AI-udkast til svaret skal gøre det hurtigere at besvare dem.",
+      createdBy:"demo-jonas",createdAt:ts("2026-04-08"),updatedAt:ts("2026-10-14"),
+      rev:{targetNet:120000,marginPct:50,rate:350,users:8,weeks:46,lifetime:2,devHours:60,oneTime:5000,maintHours:6,runMonthly:600},
+      assumptions:A([
+        ["a1","Hver medarbejder sparer 1,9 timer om ugen","gevinst",3,3,"delvist","1,9 t/uge","0,9 t/uge"],
+        ["a2","8 medarbejdere bruger udkastene fast","brug",3,2,"delvist","8 brugere","5 brugere"],
+        ["a3","Mindst 70 % af udkastene kan sendes med små rettelser","gevinst",3,3,"holder_ikke","70 %","45 %"],
+        ["a4","Udkast kan laves direkte i Zendesk","teknisk",2,2,"holder","Virker i Zendesk","Virker via makro"],
+        ["a5","API-forbruget holder sig under 600 kr. om måneden","omk",1,2,"holder","600 kr./md.","310 kr./md."]
+      ]),
+      milestones:M([
+        ["m1","Kortlæg returhenvendelser","Gennemgå 200 henvendelser og del dem op i typer.","2026-04-24",6,["a1"],
+          "60 % af henvendelserne handler om returnering, men de er mere forskellige end antaget.","fortsaet","Der er nok ens henvendelser til at teste udkast.","demo-jonas","2026-04-27"],
+        ["m2","Prototype i Zendesk","Udkast laves med en makro og testes af to medarbejdere i to uger.","2026-06-05",20,["a3","a4","a5"],
+          "Kun 45 % af udkastene kunne bruges med små rettelser. Udkast til ombytning var ofte forkerte.","juster","Vi begrænser værktøjet til rene returneringer og dropper ombytning. Gevinsten bliver mindre, men stadig over rammen.","demo-jonas","2026-06-10"],
+        ["m3","Ny test kun med returneringer","Samme test som før, men kun på rene returneringer.","2026-11-20",10,["a1","a2","a3"],
+          "","","","",""]
+      ]),
+      feedback:{
+        "demo-jonas":F(4,5,3,3,"Beslutningspunktet gjorde det tydeligt, at vi skulle justere i stedet for at bygge videre på noget, der ikke virkede.","2026-06-15")
+      },
+      build:{
+        summary:"Laver et udkast til svar på returhenvendelser direkte i Zendesk ud fra kundens ordre og returpolitikken.",
+        stack:["Claude API","Zendesk","JavaScript"],
+        reusable:"Zendesk-makro der sender en sag til Claude og indsætter svaret som kladde",
+        links:"",
+        learnings:"Giv modellen returpolitikken med i hvert kald. Udkast til ombytning kræver ordredata, som vi ikke har adgang til endnu.",
+        contact:"Jonas, Kundeservice",
+        live:false
+      }
+    },
+
+    "demo-tekster":{
+      name:"Produkttekster med AI",department:"Marketing",
+      description:"Nye produkter ligger ofte i flere uger uden en ordentlig tekst, fordi Marketing ikke når at skrive dem.",
+      createdBy:"demo-sara",createdAt:ts("2026-08-18"),updatedAt:ts("2026-10-28"),
+      rev:{targetNet:80000,marginPct:50,rate:380,users:4,weeks:46,lifetime:2,devHours:40,oneTime:0,maintHours:3,runMonthly:400},
+      assumptions:A([
+        ["a1","Hver tekstforfatter sparer 2,3 timer om ugen","gevinst",3,3,"delvist","2,3 t/uge","1,5 t/uge indtil videre"],
+        ["a2","AI-teksterne passer til vores tone efter en kort rettelse","gevinst",3,3,"holder","Under 5 min. pr. tekst","Ca. 4 min. pr. tekst"],
+        ["a3","4 medarbejdere bruger værktøjet fast","brug",2,2,"ikke","4 brugere",""],
+        ["a4","Produktdata i Shopify er gode nok som grundlag","teknisk",2,3,"holder_ikke","Alle felter udfyldt","Mangler materiale og mål på 30 %"],
+        ["a5","Værktøjet kan bygges på 40 timer","omk",2,2,"ikke","40 timer",""]
+      ]),
+      milestones:M([
+        ["m1","Test af tone på 20 produkter","Lav tekster til 20 produkter og lad to tekstforfattere rette dem.","2026-09-26",8,["a2","a4"],
+          "Tonen rammer godt, men manglende produktdata giver forkerte detaljer i nogle tekster.","","","",""],
+        ["m2","Prototype med Shopify-data","Hent produktdata automatisk og lav tekst med et klik.","2026-11-13",20,["a1","a5"],"","","","",""],
+        ["m3","Pilot i hele Marketing","Brug værktøjet på alle nye produkter i en måned.","2026-12-15",10,["a1","a3"],"","","","",""]
+      ]),
+      feedback:{},
+      build:{
+        summary:"Skriver et første udkast til produkttekster ud fra data i Shopify og en fast skabelon for tone.",
+        stack:["Claude API","Shopify API","Python"],
+        reusable:"Prompt-skabelon med Sinful-tone og eksempler",
+        links:"",
+        learnings:"Kvaliteten afhænger mere af produktdata end af prompten. Ret data i Shopify først.",
+        contact:"Sara, Marketing",
+        live:false
+      }
+    },
+
+    "demo-bilag":{
+      name:"Bilagsmatching",department:"Økonomi",
+      description:"Økonomi matcher hver måned bilag med banktransaktioner i hånden. Et værktøj skulle foreslå matches automatisk.",
+      createdBy:"demo-anders",createdAt:ts("2026-03-16"),updatedAt:ts("2026-07-03"),
+      rev:{targetNet:90000,marginPct:50,rate:420,users:2,weeks:46,lifetime:3,devHours:80,oneTime:10000,maintHours:8,runMonthly:900},
+      assumptions:A([
+        ["a1","Hver bogholder sparer 4,7 timer om ugen","gevinst",3,3,"holder_ikke","4,7 t/uge","1,2 t/uge"],
+        ["a2","80 % af bilagene kan matches automatisk","gevinst",3,3,"holder_ikke","80 %","35 %"],
+        ["a3","Data kan hentes fra økonomisystemet","teknisk",3,2,"delvist","Via API","Kun via eksport"],
+        ["a4","Værktøjet kan bygges på 80 timer","omk",2,3,"ikke","80 timer",""]
+      ]),
+      milestones:M([
+        ["m1","Kortlæg nuværende afstemning","Mål tiden på månedsafslutningen og gennemgå hvilke bilag der er svære.","2026-04-03",6,["a1"],
+          "Afstemningen tager mindre tid end antaget, ca. 1,2 timer om ugen pr. person. Det svære er undtagelserne.","fortsaet","Vi tester alligevel matching, fordi undtagelserne måske kan løses.","demo-anders","2026-04-06"],
+        ["m2","Test af automatisk matching","Kør matching på tre måneders bilag og mål træfsikkerheden.","2026-06-26",16,["a2","a3"],
+          "Kun 35 % blev matchet sikkert. Data kan kun hentes via manuel eksport.","stop","Gevinsten kan ikke nå op på det krævede, og det tekniske grundlag mangler. Vi stopper, før der bruges flere timer.","demo-anders","2026-07-02"]
+      ]),
+      feedback:{
+        "demo-anders":F(5,5,4,4,"Godt at kunne stoppe efter 22 timer i stedet for at opdage det efter 80.","2026-07-03"),
+        "demo-sofie":F(4,4,4,3,"","2026-07-04")
+      },
+      build:{
+        summary:"Prototype der foreslog match mellem bilag og banktransaktioner ud fra beløb, dato og tekst. Stoppet efter test.",
+        stack:["Python","Excel","Claude API"],
+        reusable:"Script til at læse og rense bankudtræk fra CSV",
+        links:"",
+        learnings:"Mål tidsforbruget før I bygger. Gevinsten var meget mindre end antaget, og økonomisystemet har intet åbent API. Undtagelserne er det svære, ikke de almindelige bilag.",
+        contact:"Anders, Økonomi",
+        live:false
+      }
+    },
+
+    "demo-pluk":{
+      name:"Pluklister til lageret",department:"Lager",
+      description:"Lageret printer pluklister i ordrens rækkefølge, så medarbejderne går de samme gange flere gange. Listerne skal sorteres efter placering.",
+      createdBy:"demo-kasper",createdAt:ts("2026-05-05"),updatedAt:ts("2026-10-08"),
+      rev:{targetNet:70000,marginPct:50,rate:300,users:6,weeks:46,lifetime:3,devHours:25,oneTime:0,maintHours:2,runMonthly:0},
+      assumptions:A([
+        ["a1","Hver plukker sparer 1,7 timer om ugen","gevinst",3,3,"holder","1,7 t/uge","1,9 t/uge"],
+        ["a2","6 plukkere bruger de nye lister","brug",2,1,"holder","6 brugere","6 brugere"],
+        ["a3","Lagerplaceringer i Shopify er opdaterede","teknisk",3,3,"delvist","Alle varer","92 % af varerne"],
+        ["a4","Værktøjet kan bygges på 25 timer","omk",1,2,"holder","25 timer","22 timer"]
+      ]),
+      milestones:M([
+        ["m1","Test sorteret liste en dag","Print sorterede lister for én vagt og mål gåtid.","2026-05-22",6,["a1","a3"],
+          "Plukketiden faldt med ca. 20 %. 8 % af varerne manglede placering.","fortsaet","Gevinsten er tydelig. Manglende placeringer rettes løbende.","demo-kasper","2026-05-25"],
+        ["m2","Brug i hele lageret i tre uger","Alle plukkere bruger de nye lister.","2026-07-10",10,["a1","a2","a4"],
+          "Alle bruger listerne. Besparelsen holder over tid.","fortsaet","Sættes i drift.","demo-kasper","2026-07-13"]
+      ]),
+      feedback:{
+        "demo-kasper":F(4,4,5,5,"Simpelt projekt, men godt at have tallene til at vise ledelsen.","2026-07-15")
+      },
+      build:{
+        summary:"Henter dagens ordrer fra Shopify og printer pluklister sorteret efter lagerplacering.",
+        stack:["Python","Shopify API","PDF"],
+        reusable:"Shopify-udtræk fra lagerrapporten blev genbrugt direkte",
+        links:"Kode: intern Git under lager/pluklister",
+        learnings:"Genbrug af Shopify-udtrækket sparede ca. 8 timer. Sørg for at alle varer har en placering, ellers havner de nederst på listen.",
+        contact:"Kasper, Lager",
+        live:true
+      }
+    },
+
+    "demo-vagt":{
+      name:"Vagtplan-påmindelser",department:"HR",
+      description:"Medarbejdere glemmer bytte af vagter, og HR bruger tid på at ringe rundt. Automatiske påmindelser på SMS skal hjælpe.",
+      createdBy:"demo-line",createdAt:ts("2026-10-20"),updatedAt:ts("2026-10-27"),
+      rev:{targetNet:40000,marginPct:50,rate:350,users:2,weeks:46,lifetime:2,devHours:20,oneTime:0,maintHours:2,runMonthly:250},
+      assumptions:{},milestones:{},feedback:{}
+    }
+  };
+  return {projects,people};
+})();
 </script>
 <script>
 (function(){
@@ -215,13 +435,18 @@ const FQ=[
 
 let db=null,userCap=null,dl=null,meId=null,canWrite=true,localMode=false;
 let projects={},loaded=false,loadErr="",staleNote="";
-const names={};
-const view={pid:null,tab:"gevinst"};
+/* mode: "live" = fælles database, "demo" = opdigtede projekter kun i hukommelsen */
+let mode="live",liveProjects=projects,demoProjects=null;
+const DEMO=window.DDP_DEMO||{projects:{},people:{}};
+const inMemory=()=>localMode||mode==="demo";
+const canEdit=()=>mode==="demo"||canWrite;
+const names=Object.assign({},DEMO.people);
+const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""}};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
 function queuePatch(id,patch,delay=600){
-  if(!canWrite)return;
+  if(!canEdit())return;
   pend[id]=deepMerge(pend[id]||{},clone(patch));
   if(projects[id])deepMerge(projects[id],clone(patch));
   clearTimeout(timers[id]);
@@ -230,7 +455,7 @@ function queuePatch(id,patch,delay=600){
 function flush(id){
   const p=pend[id];if(!p)return;delete pend[id];
   p.updatedAt=Date.now();
-  if(localMode){if(projects[id])projects[id].updatedAt=p.updatedAt;return}
+  if(inMemory()){if(projects[id])projects[id].updatedAt=p.updatedAt;return}
   chains[id]=(chains[id]||Promise.resolve()).then(()=>doUpdate(id,p,true));
 }
 async function doUpdate(id,p,retry){
@@ -246,12 +471,12 @@ window.addEventListener("pagehide",flushAll);
 
 async function createProject(data){
   const id=newId();
-  if(localMode){projects[id]=data;return id}
+  if(inMemory()){projects[id]=data;return id}
   try{await db.collection("projects").doc(id).set(data);projects[id]=projects[id]||data;return id}
   catch(e){toast(e&&e.code==="quota_exceeded"?"Databasen er fuld.":"Projektet kunne ikke oprettes.");return null}
 }
 async function deleteProject(id){
-  if(localMode){delete projects[id];return}
+  if(inMemory()){delete projects[id];return}
   try{await db.doc("projects/"+id).delete();delete projects[id]}catch(e){toast("Projektet kunne ikke slettes.")}
 }
 
@@ -279,7 +504,24 @@ function status(p){
   const dec=listOf(p.milestones).filter(m=>m.decision&&m.decidedAt).sort((a,b)=>b.decidedAt-a.decidedAt);
   if(!dec.length)return listOf(p.assumptions).length?["I test","acc"]:["Under planlægning",""];
   const d=dec[0].decision;
+  if(d==="fortsaet"&&p.build&&p.build.live)return ["I drift","ok"];
   return d==="stop"?["Stoppet","bad"]:d==="juster"?["Justeres","warn"]:["Fortsætter","ok"];
+}
+const stackOf=p=>(p.build&&Array.isArray(p.build.stack))?p.build.stack:[];
+function allStackTags(obj){
+  const seen=new Map();
+  Object.values(obj||{}).forEach(p=>stackOf(p||{}).forEach(t=>{const k=String(t).toLowerCase();if(!seen.has(k))seen.set(k,t)}));
+  return [...seen.values()].sort((a,b)=>a.localeCompare(b,"da"));
+}
+function addTag(pid,tag){
+  const t=String(tag??"").trim(),p=projects[pid];if(!t||!p)return;
+  const cur=stackOf(p);
+  if(cur.some(x=>x.toLowerCase()===t.toLowerCase()))return;
+  queuePatch(pid,{build:{stack:cur.concat(t)}},0);
+}
+function removeTag(pid,tag){
+  const p=projects[pid];if(!p)return;
+  queuePatch(pid,{build:{stack:stackOf(p).filter(x=>x!==tag)}},0);
 }
 function aNum(p){const m={};listOf(p.assumptions).forEach((a,i)=>m[a.id]="A"+(i+1));return m}
 
@@ -305,18 +547,69 @@ function render(){
   const val=key&&a.type!=="checkbox"&&a.type!=="radio"?a.value:null;
   const sy=window.scrollY;
   const app=$("#app");
-  if(!loaded&&!localMode){app.innerHTML=`<p class="muted">Indlæser projekter …</p>${staleNote?`<div class="banner info">${esc(staleNote)}</div>`:""}`;return}
+  renderMode();
+  if(!loaded&&!inMemory()){app.innerHTML=`<p class="muted">Indlæser projekter …</p>${staleNote?`<div class="banner info">${esc(staleNote)}</div>`:""}`;return}
   if(view.pid&&!projects[view.pid]){view.pid=null}
-  app.innerHTML=(loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
-    +(localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
-    +(!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
-    +`<fieldset class="all" ${canWrite?"":"disabled"}>`+(view.pid?renderProject():renderOverview())+`</fieldset>`;
+  const live=mode==="live";
+  app.innerHTML=(mode==="demo"?`<div class="banner demo">Du ser demodata. Ændringer gemmes ikke.</div>`:"")
+    +(live&&loadErr?`<div class="banner err">${esc(loadErr)}</div>`:"")
+    +(live&&localMode?`<div class="banner info">Data gemmes ikke i denne visning. Åbn værktøjet via det publicerede link for at dele projekter med kolleger.</div>`:"")
+    +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
+    +(view.pid?fieldset(renderProject()):renderOverview());
   $("#crumb").textContent=view.pid?(P().name||"Uden navn"):"";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
+}
+
+function renderMode(){
+  const el=$("#mode");if(!el)return;
+  el.innerHTML=`<span class="seg" role="group" aria-label="Visning">${[["demo","Demo"],["live","Live"]].map(([k,l])=>`<button type="button" data-act="mode" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</span>`;
+}
+function applyMode(m){
+  mode=m;
+  if(m==="demo"&&!demoProjects)demoProjects=clone(DEMO.projects);
+  projects=m==="demo"?demoProjects:liveProjects;
+}
+function setMode(m){
+  flushAll();applyMode(m);view.pid=null;setHash();render();
+}
+
+const fieldset=html=>`<fieldset class="all" ${canEdit()?"":"disabled"}>${html}</fieldset>`;
+
+/* katalog: projekter med beskrivelse eller tech stack, filtreret */
+function catalogItems(obj,f){
+  f=f||{};
+  const tech=String(f.tech||"").toLowerCase(),q=String(f.q||"").trim().toLowerCase();
+  return Object.entries(obj||{}).map(([id,p])=>Object.assign({id},p))
+    .filter(p=>{const b=p.build||{};return String(b.summary||"").trim()||stackOf(p).length})
+    .filter(p=>!f.dep||p.department===f.dep)
+    .filter(p=>!tech||stackOf(p).some(t=>t.toLowerCase()===tech))
+    .filter(p=>{if(!q)return true;const b=p.build||{};return [p.name,p.department,b.summary,b.reusable,b.learnings].concat(stackOf(p)).some(x=>String(x||"").toLowerCase().includes(q))})
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+}
+function renderCatalog(){
+  const all=catalogItems(projects,{}),items=catalogItems(projects,view.filter),f=view.filter;
+  const deps=[...new Set(all.map(p=>p.department).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da"));
+  const techs=allStackTags(Object.fromEntries(all.map(p=>[p.id,p])));
+  const opt=(v,l,cur)=>`<option value="${esc(v)}" ${cur===v?"selected":""}>${esc(l)}</option>`;
+  const filters=`<div class="cat-filters">
+      <select data-k="filter.dep" aria-label="Afdeling">${opt("","Alle afdelinger",f.dep)}${deps.map(d=>opt(d,d,f.dep)).join("")}</select>
+      <select data-k="filter.tech" aria-label="Teknologi">${opt("","Alle teknologier",f.tech)}${techs.map(t=>opt(t,t,f.tech)).join("")}</select>
+      <input type="search" data-k="filter.q" value="${esc(f.q)}" placeholder="Søg i værktøjer, læring og genbrug" aria-label="Søg">
+    </div>`;
+  const cards=items.map(p=>{const [st,cls]=status(p),b=p.build||{},stack=stackOf(p);
+    return `<button class="cat-card" type="button" data-act="open-build" data-id="${p.id}">
+      <div class="cat-top"><span class="name">${esc(p.name||"Uden navn")}</span><span class="pill ${cls}">${st}</span></div>
+      <div class="small muted">${esc(p.department||"Ingen afdeling")}</div>
+      ${b.summary?`<p class="cat-sum">${esc(b.summary)}</p>`:""}
+      ${stack.length?`<div class="tags">${stack.slice(0,5).map(t=>`<span class="tag plain">${esc(t)}</span>`).join("")}${stack.length>5?`<span class="small muted">+${stack.length-5}</span>`:""}</div>`:""}
+      ${b.reusable?`<div class="small"><span class="muted">Genbrugelig:</span> ${esc(b.reusable)}</div>`:""}
+    </button>`}).join("");
+  if(!all.length)return `<p class="empty">Der er ingen dokumenterede værktøjer endnu. Udfyld fanen Sådan er det bygget i et projekt, så det kommer med her.</p>`;
+  return filters+(items.length?`<div class="cat-grid">${cards}</div>`:`<p class="empty">Ingen værktøjer matcher filtrene.</p>`);
 }
 
 function renderOverview(){
@@ -335,7 +628,10 @@ function renderOverview(){
       <div><h1>Interne udviklingsprojekter</h1><p class="muted" style="max-width:62ch;margin:0">Planlæg hvert projekt ud fra, hvad det skal give, test de antagelser det hviler på, og beslut ved hver milepæl om det skal fortsætte, justeres eller stoppes.</p></div>
       <div class="row-actions">${list.length?`<button class="btn" data-act="export-json" type="button">Eksportér alle data</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button>`:""}</div>
     </div>
-    <div class="panel" style="margin-top:22px">
+    <nav class="hometabs" role="tablist">${[["projekter","Projekter",list.length],["katalog","Værktøjskatalog",catalogItems(projects,{}).length]].map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${view.home===k}" data-act="home-tab" data-home="${k}">${l} <span class="muted">(${n})</span></button>`).join("")}</nav>
+    ${view.home==="katalog"?renderCatalog():`    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
+      :`<p class="empty">Der er ingen projekter endnu. Opret det første nedenfor.</p>`}
+    ${fieldset(`<div class="panel" style="margin-top:28px">
       <h2>Nyt projekt</h2><p class="muted small">Et projekt er en idé til et internt værktøj fra en afdeling.</p>
       <div class="grid2">
         <div><label class="f" for="np-name">Projektnavn</label><input type="text" id="np-name" placeholder="Fx automatisk lagerrapport"></div>
@@ -343,16 +639,14 @@ function renderOverview(){
       </div>
       <div style="margin-top:14px"><label class="f" for="np-desc">Hvilket problem skal værktøjet løse?</label><textarea id="np-desc" rows="2"></textarea></div>
       <div style="margin-top:14px"><button class="btn primary" data-act="create" type="button">Opret projekt</button></div>
-    </div>
-    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
-      :`<p class="empty">Der er ingen projekter endnu. Opret det første ovenfor.</p>`}`;
+    </div>`)}`}`;
 }
 
 function renderProject(){
   const p=P();
   const [st,cls]=status(p);
-  const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["evaluering","Evaluering"]];
-  const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,evaluering:tabEval}[view.tab]||tabRev;
+  const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
+  const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,bygget:tabBuild,evaluering:tabEval}[view.tab]||tabRev;
   return `<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:260px">
         <input type="text" data-k="p.name" value="${esc(p.name)}" aria-label="Projektnavn" style="font-size:26px;font-weight:700;border-color:transparent;padding:4px 6px;margin-left:-7px;background:transparent;letter-spacing:-.02em">
@@ -506,6 +800,30 @@ function tabMs(p){
     ${ms.length?cards:`<p class="empty">Ingen milepæle endnu. Standardforløbet går fra kortlægning af arbejdsgangen over prototype og MVP til pilot.</p>`}`;
 }
 
+function tabBuild(p){
+  const b=p.build||{},stack=stackOf(p);
+  const txt=(k,label,rows,ph)=>`<div><label class="f" for="b-${k}">${label}</label><textarea id="b-${k}" data-k="b.${k}" rows="${rows}" placeholder="${ph}">${esc(b[k])}</textarea></div>`;
+  return `<p class="lead">Beskriv hvordan værktøjet er bygget, så andre kan lære af det og genbruge dele, når de skal lave noget lignende.</p>
+  <div class="two">
+    <div class="panel stack">
+      ${txt("summary","Hvad værktøjet gør",3,"Fx henter lagertal fra Shopify hver morgen og lægger en rapport i et delt ark")}
+      <div><label class="f" for="tag-in">Tech stack</label>
+        <div class="tags">${stack.map(t=>`<span class="tag">${esc(t)}<button type="button" data-act="del-tag" data-tag="${esc(t)}" aria-label="Fjern ${esc(t)}">×</button></span>`).join("")}</div>
+        <div style="display:flex;gap:6px"><input type="text" id="tag-in" data-tagin="1" list="tag-list" placeholder="Fx Python, Shopify API, Claude API" autocomplete="off">
+          <button class="btn" type="button" data-act="add-tag">Tilføj</button></div>
+        <datalist id="tag-list">${allStackTags(projects).filter(t=>!stack.some(x=>x.toLowerCase()===t.toLowerCase())).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+        <p class="small muted" style="margin:6px 0 0">Tryk Enter eller komma for at tilføje.</p></div>
+      <label class="check"><input type="checkbox" data-k="b.live" ${b.live?"checked":""}><span>Værktøjet er i drift</span></label>
+    </div>
+    <div class="panel stack">
+      ${txt("reusable","Dele andre kan genbruge",2,"Fx Shopify-udtræk, prompt-skabelon")}
+      ${txt("links","Links",2,"Kode, dokumentation eller demo")}
+      ${txt("learnings","Læring og faldgruber",3,"Hvad skal man vide, hvis man bygger noget lignende?")}
+      <div><label class="f" for="b-contact">Kontaktperson</label><input type="text" id="b-contact" data-k="b.contact" value="${esc(b.contact)}" placeholder="Fx Mette, Indkøb"></div>
+    </div>
+  </div>`;
+}
+
 function tabEval(p){
   const fb=p.feedback||{},mine=(meId&&fb[meId])||{};
   const all=Object.entries(fb).filter(([,v])=>v&&!v.deleted);
@@ -528,11 +846,17 @@ function patchFromKey(k,v){
   if(s[0]==="rev")return {rev:{[s[1]]:v}};
   if(s[0]==="a")return {assumptions:{[s[1]]:{[s[2]]:v}}};
   if(s[0]==="m"){if(s[2]==="tests")return {milestones:{[s[1]]:{tests:{[s[3]]:v}}}};return {milestones:{[s[1]]:{[s[2]]:v}}}}
+  if(s[0]==="b")return {build:{[s[1]]:v}};
   if(s[0]==="f"&&meId)return {feedback:{[meId]:{[s[1]]:v,at:Date.now()}}};
   return null;
 }
 function onField(e){
-  const el=e.target;const k=el.dataset&&el.dataset.k;if(!k||!view.pid)return;
+  const el=e.target;const k=el.dataset&&el.dataset.k;
+  if(k&&k.startsWith("filter.")){
+    if(e.type==="input"&&el.tagName==="SELECT")return;
+    view.filter[k.slice(7)]=el.value;render();return;
+  }
+  if(!k||!view.pid)return;
   let v=el.type==="checkbox"?el.checked:el.value;
   if(el.dataset.num&&el.type!=="checkbox")v=v===""?"":Number(v);
   const patch=patchFromKey(k,v);if(!patch)return;
@@ -545,6 +869,11 @@ function onField(e){
 }
 document.addEventListener("input",onField);
 document.addEventListener("change",onField);
+document.addEventListener("keydown",e=>{
+  const el=e.target;if(!el.dataset||!el.dataset.tagin||!view.pid)return;
+  if(e.key!=="Enter"&&e.key!==",")return;
+  e.preventDefault();addTag(view.pid,el.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();
+});
 
 function nextOrder(obj){return listOf(obj).reduce((m,x)=>Math.max(m,x.order||0),0)+1}
 function addAssumption(p,a){
@@ -556,12 +885,15 @@ function addAssumption(p,a){
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
   const act=b.dataset.act,p=P();
+  if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
+  if(act==="home-tab"){view.home=b.dataset.home;setHash();render();return}
+  if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);return}
   if(act==="home"){flushAll();view.pid=null;setHash();render();return}
   if(act==="open"){view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);return}
   if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();return}
   if(act==="export-json")return exportJson();
   if(act==="export-csv")return exportCsv();
-  if(!canWrite)return;
+  if(!canEdit())return;
   if(act==="create"){
     const name=$("#np-name").value.trim();
     if(!name){$("#np-name").focus();toast("Giv projektet et navn.");return}
@@ -575,6 +907,8 @@ document.addEventListener("click",async e=>{
   if(!p)return;
   if(act==="del-project"){if(!confirm(`Slet "${p.name||"projektet"}" for alle? Det kan ikke fortrydes.`))return;const id=view.pid;view.pid=null;setHash();await deleteProject(id);render();toast("Projektet er slettet.");return}
   if(act==="add-ass"){const id=addAssumption(p,{});render();const t=document.querySelector(`[data-k="a.${id}.text"]`);if(t)t.focus();return}
+  if(act==="add-tag"){const i=$("#tag-in");addTag(view.pid,i.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();return}
+  if(act==="del-tag"){removeTag(view.pid,b.dataset.tag);render();return}
   if(act==="del-ass"){queuePatch(view.pid,{assumptions:{[b.dataset.id]:{deleted:true}}},0);render();return}
   if(act==="suggest-ass"){
     const c=calc(rev(p));
@@ -613,6 +947,7 @@ function exportJson(){
     gevinstregnskab:Object.assign({},rev(p),{beregnet:calc(rev(p))}),
     antagelser:listOf(p.assumptions).map((a,i)=>({nr:"A"+(i+1),tekst:a.text,kategori:CATS[a.cat]||a.cat,betydning:LVL[a.impact||2],usikkerhed:LVL[a.uncertainty||2],forventet:a.expected,faktisk:a.actual,status:STATUS[a.status||"ikke"]})),
     milepaele:msSorted(p).map((m,i)=>({nr:i+1,navn:m.name,dato:m.date,budget_timer:m.budget,beskrivelse:m.desc,tester:listOf(p.assumptions).filter(a=>m.tests&&m.tests[a.id]).map(a=>aNum(p)[a.id]),resultat:m.result,beslutning:DEC[m.decision]||null,begrundelse:m.rationale,besluttet_af:m.decidedBy?nameOf(m.decidedBy):null,besluttet:m.decidedAt?new Date(m.decidedAt).toISOString():null})),
+    bygget:{beskrivelse:(p.build||{}).summary||"",tech_stack:stackOf(p),genbrug:(p.build||{}).reusable||"",links:(p.build||{}).links||"",laering:(p.build||{}).learnings||"",kontakt:(p.build||{}).contact||"",i_drift:!!(p.build||{}).live},
     evaluering:Object.entries(p.feedback||{}).map(([uid,v])=>({deltager:nameOf(uid),q1:v.q1,q2:v.q2,q3:v.q3,q4:v.q4,kommentar:v.comment}))
   }));
   save("ddp-projekter.json",JSON.stringify({eksporteret:new Date().toISOString(),spoergsmaal:Object.fromEntries(FQ),projekter:out},null,2),"application/json");
@@ -627,21 +962,35 @@ function exportCsv(){
 
 /* ---------- misc ---------- */
 let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2600)}
-function setHash(){const h=view.pid?`p-${view.pid}-${view.tab}`:"";if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search)}
-function readHash(){const m=/^p-([a-z0-9]+)(?:-(gevinst|antagelser|milepaele|evaluering))?$/.exec(location.hash.slice(1));if(m){view.pid=m[1];view.tab=m[2]||"gevinst"}else view.pid=null}
+/* hash: [demo-]p-<id>-<fane>; demo-visningen har præfikset "demo" */
+function setHash(){
+  const body=view.pid?`p-${view.pid}-${view.tab}`:view.home==="katalog"?"katalog":"";
+  const h=[mode==="demo"?"demo":"",body].filter(Boolean).join("-");
+  if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search);
+}
+function readHashFrom(hash){
+  let s=String(hash||"").replace(/^#/,""),m="live";
+  if(/^demo(-|$)/.test(s)){m="demo";s=s.replace(/^demo-?/,"")}
+  if(m!==mode){flushAll();applyMode(m)}
+  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|bygget|evaluering))?$/.exec(s);
+  if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}
+  else{view.pid=null;view.home=s==="katalog"?"katalog":"projekter"}
+}
+const readHash=()=>readHashFrom(location.hash);
 window.addEventListener("hashchange",()=>{readHash();render()});
 readHash();
 
 /* ---------- test hooks ---------- */
 window.DDP={
-  state:()=>({mode:"live",projects,liveProjects:projects,demoProjects:{},view,canWrite}),
-  render,status,calc
+  state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
+  render,status,calc,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
+  setCanWrite:b=>{canWrite=b;render()}
 };
 
 /* ---------- boot ---------- */
 (async function boot(){
   const c=window.claude;
-  if(!c||typeof c.use!=="function"){localMode=true;loaded=true;render();return}
+  if(!c||typeof c.use!=="function"){localMode=true;loaded=true;if(mode==="live")applyMode("demo");setHash();render();return}
   c.use("downloads").then(x=>{dl=x}).catch(()=>{});
   c.use("user").then(async u=>{
     userCap=u;if(!u)return;
@@ -651,12 +1000,12 @@ window.DDP={
     resolveNames();
   }).catch(()=>{});
   db=await c.use("db").catch(()=>null);
-  if(!db){localMode=true;loaded=true;render();return}
+  if(!db){localMode=true;loaded=true;if(mode==="live")applyMode("demo");setHash();render();return}
   const timer=setTimeout(()=>{if(!loaded){staleNote="Projekterne kan ikke hentes endnu. Tjek forbindelsen; siden prøver fortsat.";render()}},10000);
   db.collection("projects").onSnapshot(snap=>{
     const next={};
     snap.docs.forEach(d=>{const data=clone(d.data());if(pend[d.id])deepMerge(data,clone(pend[d.id]));next[d.id]=data});
-    projects=next;
+    liveProjects=next;if(mode==="live")projects=next;
     if(!snap.metadata.fromCache){loaded=true;clearTimeout(timer);staleNote=""}
     else if(!loaded&&snap.size){loaded=true}
     render();resolveNames();

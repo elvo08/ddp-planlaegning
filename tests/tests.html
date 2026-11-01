@@ -151,6 +151,13 @@ test("demo: tests-referencer peger på eksisterende antagelser", () => {
     Object.values(p.milestones||{}).forEach(m => Object.keys(m.tests||{}).forEach(a => ok(p.assumptions[a], `${p.name}: ${a}`)));
 });
 
+test("forsiden viser projektlisten før Nyt projekt", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.render();
+  const h = document.getElementById("app").innerHTML;
+  ok(h.indexOf("proj-list") >= 0 && h.indexOf("proj-list") < h.indexOf("Nyt projekt"));
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

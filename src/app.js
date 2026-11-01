@@ -219,7 +219,9 @@ function renderOverview(){
       <div class="row-actions">${list.length?`<button class="btn" data-act="export-json" type="button">Eksportér alle data</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button>`:""}</div>
     </div>
     <nav class="hometabs" role="tablist">${[["projekter","Projekter",list.length],["katalog","Værktøjskatalog",catalogItems(projects,{}).length]].map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${view.home===k}" data-act="home-tab" data-home="${k}">${l} <span class="muted">(${n})</span></button>`).join("")}</nav>
-    ${view.home==="katalog"?renderCatalog():`${fieldset(`<div class="panel" style="margin-top:22px">
+    ${view.home==="katalog"?renderCatalog():`    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
+      :`<p class="empty">Der er ingen projekter endnu. Opret det første nedenfor.</p>`}
+    ${fieldset(`<div class="panel" style="margin-top:28px">
       <h2>Nyt projekt</h2><p class="muted small">Et projekt er en idé til et internt værktøj fra en afdeling.</p>
       <div class="grid2">
         <div><label class="f" for="np-name">Projektnavn</label><input type="text" id="np-name" placeholder="Fx automatisk lagerrapport"></div>
@@ -227,9 +229,7 @@ function renderOverview(){
       </div>
       <div style="margin-top:14px"><label class="f" for="np-desc">Hvilket problem skal værktøjet løse?</label><textarea id="np-desc" rows="2"></textarea></div>
       <div style="margin-top:14px"><button class="btn primary" data-act="create" type="button">Opret projekt</button></div>
-    </div>`)}
-    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
-      :`<p class="empty">Der er ingen projekter endnu. Opret det første ovenfor.</p>`}`}`;
+    </div>`)}`}`;
 }
 
 function renderProject(){
