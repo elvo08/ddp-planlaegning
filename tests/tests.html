@@ -133,6 +133,24 @@ test("katalog-fanen og hash", () => {
   DDP.setMode("live");
 });
 
+/* Task 5: demoindhold */
+test("demo dækker alle faser", () => {
+  const s = new Set(Object.values(DDP_DEMO.projects).map(p => DDP.status(p)[0]));
+  ["I drift","Justeres","I test","Stoppet","Under planlægning"].forEach(x => ok(s.has(x), x));
+});
+test("demo: alle personer findes", () => {
+  for (const p of Object.values(DDP_DEMO.projects)) {
+    ok(DDP_DEMO.people[p.createdBy], p.name);
+    Object.values(p.milestones||{}).forEach(m => m.decidedBy && ok(DDP_DEMO.people[m.decidedBy], m.name));
+    Object.keys(p.feedback||{}).forEach(k => ok(DDP_DEMO.people[k], k));
+  }
+});
+test("demo: kataloget har mindst 4 værktøjer", () => ok(DDP.catalogItems(DDP_DEMO.projects,{}).length >= 4));
+test("demo: tests-referencer peger på eksisterende antagelser", () => {
+  for (const p of Object.values(DDP_DEMO.projects))
+    Object.values(p.milestones||{}).forEach(m => Object.keys(m.tests||{}).forEach(a => ok(p.assumptions[a], `${p.name}: ${a}`)));
+});
+
 runAll();
 </script>
 </body>
