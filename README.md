@@ -33,7 +33,7 @@ server/
   test_main.py   Tests af API'et
 src/
   index.html     Sidens skelet
-  styles.css     Design, farver og mørk tilstand (variabler under :root)
+  styles.css     Design og farver (variabler under :root). Altid lys, uanset systemets farvetema
   demo.js        Opdigtede demoprojekter (window.DDP_DEMO)
   app.js         Al logik i brugerfladen
 tests/

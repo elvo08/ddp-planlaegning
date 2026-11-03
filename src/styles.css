@@ -7,14 +7,6 @@
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#14171f; --surface:#1c202b; --surface-2:#252a37; --ink:#e7e9ef; --ink-2:#a3aabb; --line:#343a4a; --line-strong:#6b7489;
-    --accent:#e0709e; --accent-soft:#3a1f2c; --on-accent:#1a0d13;
-    --ok:#6cc792; --ok-soft:#1d3327; --warn:#e2ad5a; --warn-soft:#3a2d17; --bad:#f08a80; --bad-soft:#3c1f1d;
-    --focus:#8fb0ff; --info:#9db8ff; --info-soft:#1f2a45; color-scheme:dark;
-  }
-}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif}
