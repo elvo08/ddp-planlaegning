@@ -588,7 +588,10 @@ function render(){
   document.title=(view.pid?`${tabLabel(view.tab)} · ${P().name||"Uden navn"} · `:view.home==="katalog"?"Værktøjskatalog · ":"")+"DDP-planlægning";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
-    if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
+    if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});
+      /* Talfelter kan ikke få markøren sat med setSelectionRange, og focus() sætter den forrest, så det næste tal lander foran det indtastede. At sætte værdien igen flytter markøren sidst i feltet. */
+      if(el.type==="number"){const v=el.value;el.value="";el.value=v}
+      else if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
 }

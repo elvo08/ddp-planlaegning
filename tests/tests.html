@@ -359,6 +359,20 @@ test("farver: kun én fyldt knap på forsiden", () => {
   eq(appEl().querySelectorAll(".btn.primary").length, 1); DDP.setMode("live");
 });
 
+test("talfelt: markøren bliver sidst i feltet efter gen-rendering", () => {
+  DDP.setMode("live");
+  window.__snap({docs:[fakeDoc("tal",{name:"Tal", rev:{}, assumptions:{}, milestones:{}, feedback:{}})], size:1, metadata:{fromCache:false}});
+  DDP.readHashFrom("#p-tal-gevinst"); DDP.render();
+  const f = () => document.querySelector('[data-k="rev.rate"]');
+  f().focus(); f().select();
+  document.execCommand("insertText", false, "5");
+  eq(f().value, "5", "første tegn");
+  DDP.render();
+  document.execCommand("insertText", false, "0");
+  eq(f().value, "50", "0 skal skrives efter 5, ikke foran");
+  DDP.readHashFrom(""); DDP.render();
+});
+
 runAll();
 </script>
 </body>
