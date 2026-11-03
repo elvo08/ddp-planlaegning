@@ -191,5 +191,20 @@ window.DDP_DEMO=(function(){
       assumptions:{},milestones:{},feedback:{}
     }
   };
+  /* note: id, tekst, af, dato. Viser hvordan kontekst skrives ned, hvor den hører til */
+  const N=(rows)=>Object.fromEntries(rows.map(([id,text,by,at],i)=>[id,{text,by,at:ts(at),order:i+1}]));
+  projects["demo-retur"].notes=N([
+    ["n1","Kundeservice har spidsbelastning i januar, så en pilot i hele teamet kan tidligst starte i februar.","demo-jonas","2026-10-14"]
+  ]);
+  projects["demo-retur"].assumptions.a1.notes=N([
+    ["n1","Målt på to medarbejdere i uge 24-25. Tallet er lavere end forventet, fordi ombytninger stadig skrives manuelt.","demo-jonas","2026-06-10"]
+  ]);
+  projects["demo-retur"].milestones.m3.notes=N([
+    ["n1","Testen er udskudt en uge, fordi Zendesk-makroen skulle opdateres først.","demo-sofie","2026-11-02"],
+    ["n2","Husk at måle på alle tre, ikke kun de to fra sidst.","demo-jonas","2026-11-03"]
+  ]);
+  projects["demo-lager"].notes=N([
+    ["n1","Rapporten kører nu også for lageret i Aarhus. Ingen ekstra vedligehold indtil videre.","demo-mette","2026-10-22"]
+  ]);
   return {projects,people};
 })();

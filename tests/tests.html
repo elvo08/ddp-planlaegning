@@ -551,6 +551,14 @@ test("ret planen: fjernet antagelse forsvinder fra milepælens testliste", () =>
   const gates = [...appEl().querySelectorAll(".gate-a")]; eq(gates.length, 1); ok(gates[0].textContent.includes("y"), "kun den tilbageværende antagelse vises");
 });
 
+/* Demodata med noter */
+test("demo: mindst ét projekt har noter på projekt, antagelse og milepæl, og alle by findes", () => {
+  const ps = Object.values(DDP_DEMO.projects); const all = [];
+  ps.forEach(p => { Object.values(p.notes||{}).forEach(n => all.push(["p",n])); Object.values(p.assumptions).forEach(a => Object.values(a.notes||{}).forEach(n => all.push(["a",n]))); Object.values(p.milestones).forEach(m => Object.values(m.notes||{}).forEach(n => all.push(["m",n]))); });
+  ["p","a","m"].forEach(k => ok(all.some(([kind]) => kind === k), "noter af typen " + k));
+  all.forEach(([,n]) => { ok(n.text && n.at && n.order, "note er udfyldt"); ok(DDP_DEMO.people[n.by], n.by); });
+});
+
 runAll();
 </script>
 </body>
