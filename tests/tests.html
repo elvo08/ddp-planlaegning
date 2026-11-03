@@ -243,6 +243,79 @@ test("navn: spørger ikke i demo", () => {
   DDP.setUserForTest(fakeUser, "Test"); DDP.setMode("live");
 });
 
+/* Enklere design (interface-review) */
+const appEl = () => document.getElementById("app");
+const openDemo = h => { DDP.setMode("demo"); DDP.readHashFrom(h); DDP.render(); };
+const unnamed = () => [...appEl().querySelectorAll("input:not([type=hidden]),select,textarea")]
+  .filter(el => !(el.labels && el.labels.length) && !el.getAttribute("aria-label")).length;
+test("design: alle felter på Antagelser har et navn", () => { openDemo("#demo-p-demo-retur-antagelser"); eq(unnamed(), 0); });
+test("design: alle felter på Milepæle har et navn", () => { openDemo("#demo-p-demo-retur-milepaele"); eq(unnamed(), 0); });
+test("design: Antagelser bruger ingen fast kolonnebredde inline", () => {
+  openDemo("#demo-p-demo-retur-antagelser");
+  ok(![...appEl().querySelectorAll(".two")].some(d => d.style.gridTemplateColumns), "ingen inline grid-template-columns");
+});
+test("design: matrix-chip viser status med tekst, ikke kun farve", () => {
+  openDemo("#demo-p-demo-retur-antagelser");
+  const chip = [...appEl().querySelectorAll(".chip")].find(c => c.classList.contains("s-holder_ikke"));
+  ok(chip, "der findes en chip med status holder ikke");
+  ok(/✕/.test(chip.textContent), "tegn i chippen"); ok(/Holder ikke/.test(chip.getAttribute("aria-label")||""), "status i aria-label");
+  ok(appEl().textContent.includes("✓ Holder"), "forklaring under matrixen");
+});
+test("design: sletning af antagelse kræver bekræftelse", () => {
+  openDemo("#demo-p-demo-retur-antagelser");
+  const before = appEl().querySelectorAll(".a-row").length, real = window.confirm;
+  window.confirm = () => false;
+  try { appEl().querySelector('[data-act="del-ass"]').click(); } finally { window.confirm = real; }
+  eq(appEl().querySelectorAll(".a-row").length, before);
+});
+test("design: Opret projekt står før projektlisten", () => {
+  openDemo("#demo"); const h = appEl().innerHTML;
+  ok(h.indexOf('data-act="new-project"') >= 0 && h.indexOf('data-act="new-project"') < h.indexOf("proj-list"));
+});
+test("design: projekthovedet har kun titel, status og afdeling", () => {
+  openDemo("#demo-p-demo-lager-antagelser");
+  const steps = appEl().querySelector(".steps"), before = [];
+  for (let n = steps.previousElementSibling; n; n = n.previousElementSibling) before.push(n.outerHTML);
+  const head = before.join("");
+  ok(!head.includes('data-k="p.description"'), "beskrivelsen er ikke i hovedet");
+  ok(!head.includes('data-act="del-project"'), "Slet projekt er ikke i hovedet");
+  ok(appEl().querySelector('[data-act="del-project"]'), "Slet projekt findes stadig");
+});
+test("design: problembeskrivelsen er første felt i trin 1", () => {
+  openDemo("#demo-p-demo-lager-gevinst");
+  const first = appEl().querySelector(".steps ~ fieldset [data-k]");
+  eq(first && first.dataset.k, "p.description");
+});
+test("design: resultatet står før tallene i trin 1", () => {
+  openDemo("#demo-p-demo-lager-gevinst"); const h = appEl().innerHTML;
+  ok(h.indexOf("timer om ugen") < h.indexOf('data-k="rev.targetNet"'));
+});
+test("design: besluttede milepæle er foldet sammen, åbne er foldet ud", () => {
+  openDemo("#demo-p-demo-retur-milepaele");
+  const d = [...appEl().querySelectorAll("details.ms")];
+  eq(d.length, 3); eq(d.map(x => x.open), [false, false, true]);
+});
+test("design: samme navn for 'lav antagelser' begge steder", () => {
+  openDemo("#demo-p-demo-lager-gevinst");
+  const a = appEl().querySelector('[data-act="suggest-ass"]').textContent.trim();
+  openDemo("#demo-p-demo-lager-antagelser");
+  eq(appEl().querySelector('[data-act="suggest-ass"]').textContent.trim(), a);
+});
+test("design: fejlbeskeder bliver stående, til de lukkes", async () => {
+  DDP.toast("Ændringen kunne ikke gemmes. Prøv igen.", {error:true});
+  await tick(2800);
+  const t = document.getElementById("toast");
+  ok(t.classList.contains("show"), "stadig synlig"); ok(t.querySelector('[data-act="close-toast"]'), "har Luk-knap");
+  t.querySelector('[data-act="close-toast"]').click(); ok(!t.classList.contains("show"));
+});
+test("design: fanetitel og fokus følger visningen", () => {
+  openDemo("#demo-p-demo-lager-antagelser");
+  appEl().querySelector('[data-act="tab"][data-tab="milepaele"]').click();
+  ok(document.title.startsWith("Milepæle og beslutninger · ") && document.title.endsWith(" · DDP-planlægning"), document.title);
+  eq(document.activeElement && document.activeElement.id, "view-title");
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

@@ -15,6 +15,9 @@ const CATS={gevinst:"Gevinst",brug:"Brug og adoption",omk:"Omkostning",teknisk:"
 const LVL={1:"Lav",2:"Mellem",3:"Høj"};
 const STATUS={ikke:"Ikke testet",holder:"Holder",delvist:"Holder delvist",holder_ikke:"Holder ikke"};
 const DEC={fortsaet:"Fortsæt",juster:"Justér",stop:"Stop"};
+const MARK={holder:"✓",delvist:"½",holder_ikke:"✕"};
+const TABS=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
+const SUGGEST_LABEL="Lav antagelser ud fra tallene";
 const REV_DEFAULT={targetNet:100000,marginPct:50,rate:400,users:5,weeks:46,lifetime:2,devHours:40,oneTime:0,maintHours:4,runMonthly:200};
 const FQ=[
   ["q1","Hjalp metoden dig med at se, hvad der skal være sandt, for at projektet er umagen værd?"],
@@ -32,7 +35,7 @@ const DEMO=window.DDP_DEMO||{projects:{},people:{}};
 const inMemory=()=>localMode||mode==="demo";
 const canEdit=()=>mode==="demo"||canWrite;
 const names=Object.assign({},DEMO.people);
-const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""}};
+const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""},msOpen:{}};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
@@ -54,7 +57,7 @@ async function doUpdate(id,p,retry){
   catch(e){
     if(e&&e.code==="unavailable"&&retry){await new Promise(r=>setTimeout(r,500+Math.random()*800));return doUpdate(id,p,false)}
     if(e&&e.code==="invalid_argument"){canWrite=false;toast("Du har kun læseadgang til dette værktøj.");render();return}
-    toast(e&&e.code==="quota_exceeded"?"Databasen er fuld. Slet gamle projekter for at fortsætte.":"Ændringen kunne ikke gemmes. Prøv igen.");
+    toast(e&&e.code==="quota_exceeded"?"Databasen er fuld. Slet gamle projekter for at fortsætte.":"Ændringen kunne ikke gemmes. Tjek forbindelsen, og lav ændringen igen.",{error:true});
   }
 }
 function flushAll(){for(const id in pend){clearTimeout(timers[id]);flush(id)}}
@@ -64,7 +67,7 @@ async function createProject(data){
   const id=newId();
   if(inMemory()){projects[id]=data;return id}
   try{await db.collection("projects").doc(id).set(data);liveProjects[id]=liveProjects[id]||data;return id}
-  catch(e){toast(e&&e.code==="quota_exceeded"?"Databasen er fuld.":"Projektet kunne ikke oprettes.");return null}
+  catch(e){toast(e&&e.code==="quota_exceeded"?"Databasen er fuld.":"Projektet kunne ikke oprettes. Tjek forbindelsen, og prøv igen.",{error:true});return null}
 }
 async function deleteProject(id){
   if(inMemory()){delete projects[id];return}
@@ -150,6 +153,7 @@ function render(){
     +(live&&!canWrite?`<div class="banner info">Du har læseadgang. Bed ejeren om adgang som Contributor for at redigere.</div>`:"")
     +(view.pid?renderProject():renderOverview());
   $("#crumb").textContent=view.pid?(P().name||"Uden navn"):"";
+  document.title=(view.pid?`${tabLabel(view.tab)} · ${P().name||"Uden navn"} · `:view.home==="katalog"?"Værktøjskatalog · ":"")+"DDP-planlægning";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
@@ -170,6 +174,10 @@ async function saveName(){
   myName=name;askName=false;if(meId)names[meId]=name;
   renderWho();render();toast("Navnet er gemt.");
 }
+
+const tabLabel=k=>(TABS.find(t=>t[0]===k)||TABS[0])[1];
+/* efter skift af side eller fane: fokus på overskriften, så tastatur og skærmlæser starter det rigtige sted */
+function afterRoute(){const h=$("#view-title");if(h)h.focus({preventScroll:true})}
 
 function renderMode(){
   const el=$("#mode");if(!el)return;
@@ -232,12 +240,13 @@ function renderOverview(){
       <div class="small">${next?`<div>${esc(next.name||"Milepæl")}</div><div class="muted">${fmtDate(next.date)}</div>`:`<span class="muted">Ingen åben milepæl</span>`}</div>
     </button>`}).join("");
   return `<div class="row-actions" style="justify-content:space-between;align-items:flex-end">
-      <div><h1>Interne udviklingsprojekter</h1><p class="muted" style="max-width:62ch;margin:0">Planlæg hvert projekt ud fra, hvad det skal give, test de antagelser det hviler på, og beslut ved hver milepæl om det skal fortsætte, justeres eller stoppes.</p></div>
-      <div class="row-actions">${list.length?`<button class="btn" data-act="export-json" type="button">Eksportér alle data</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button>`:""}</div>
+      <div><h1 id="view-title" tabindex="-1">Interne udviklingsprojekter</h1><p class="muted" style="max-width:62ch;margin:0">Planlæg hvert projekt ud fra, hvad det skal give, test de antagelser det hviler på, og beslut ved hver milepæl om det skal fortsætte, justeres eller stoppes.</p></div>
+      ${canEdit()?`<button class="btn primary" data-act="new-project" type="button">Opret projekt</button>`:""}
     </div>
     <nav class="hometabs" role="tablist">${[["projekter","Projekter",list.length],["katalog","Værktøjskatalog",catalogItems(projects,{}).length]].map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${view.home===k}" data-act="home-tab" data-home="${k}">${l} <span class="muted">(${n})</span></button>`).join("")}</nav>
     ${view.home==="katalog"?renderCatalog():`    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
       :`<p class="empty">Der er ingen projekter endnu. Opret det første nedenfor.</p>`}
+    ${list.length?`<details class="exports"><summary>Eksportér data</summary><div class="row-actions"><button class="btn" data-act="export-json" type="button">Alle data (JSON)</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button></div></details>`:""}
     ${fieldset(`<div class="panel" style="margin-top:28px">
       <h2>Nyt projekt</h2><p class="muted small">Et projekt er en idé til et internt værktøj fra en afdeling.</p>
       <div class="grid2">
@@ -252,7 +261,7 @@ function renderOverview(){
 function renderProject(){
   const p=P();
   const [st,cls]=status(p);
-  const tabs=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
+  const tabs=TABS;
   const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,bygget:tabBuild,evaluering:tabEval}[view.tab]||tabRev;
   return fieldset(`<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:260px">
@@ -261,11 +270,10 @@ function renderProject(){
           <input type="text" data-k="p.department" value="${esc(p.department)}" placeholder="Afdeling" aria-label="Afdeling" style="width:180px;min-height:30px;padding:3px 8px">
           ${p.createdBy?`<span>Oprettet af ${esc(nameOf(p.createdBy))} ${fmtTs(p.createdAt)}</span>`:""}</div>
       </div>
-      <button class="btn ghost danger" data-act="del-project" type="button">Slet projekt</button>
     </div>
-    <div style="margin-top:12px;max-width:760px"><label class="f" for="p-desc">Problemet værktøjet skal løse</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
     `)+`<nav class="steps" role="tablist">${tabs.map(([k,l],i)=>`<button class="step" role="tab" type="button" aria-selected="${view.tab===k}" data-act="tab" data-tab="${k}"><b>${i+1}</b>${l}</button>`).join("")}</nav>
-    `+fieldset(body(p));
+    `+fieldset(`<h2 id="view-title" class="sr-only" tabindex="-1">${tabLabel(view.tab)}</h2>`+body(p)
+      +`<div class="danger-zone"><button class="btn ghost danger" data-act="del-project" type="button">Slet projekt</button></div>`);
 }
 
 function numField(k,label,val,unit){
@@ -274,7 +282,9 @@ function numField(k,label,val,unit){
 function tabRev(p){
   const r=rev(p);
   return `<p class="lead">Start med, hvad projektet skal give, ikke med hvad det vil koste. Regn baglæns til, hvad der skal være sandt, og hvad projektet højst må koste. De tal bliver jeres første antagelser.</p>
+  <div style="margin-bottom:20px;max-width:760px"><label class="f" for="p-desc">Hvilket problem skal værktøjet løse?</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
   <div class="two">
+    <div id="rev-out">${revOut(r)}</div>
     <div class="stack">
       <div class="panel"><h3>Krævet gevinst</h3><p class="small muted">Hvad skal projektet mindst give om året for at være umagen værd?</p>
         <div class="grid3">
@@ -296,7 +306,6 @@ function tabRev(p){
         </div>
       </div>
     </div>
-    <div id="rev-out">${revOut(r)}</div>
   </div>`;
 }
 function revOut(r){
@@ -325,7 +334,7 @@ function revOut(r){
       ?`Omkostningerne ligger ${kr(c.slack)} under rammen. Projektet hviler nu på, at tidsbesparelsen faktisk opnås.`
       :`Omkostningerne overstiger rammen med ${kr(-c.slack)}. Sænk omkostningerne, find flere brugere, eller overvej om projektet skal startes.`}</div>
     <p class="small muted" style="margin:12px 0 0">Nulpunkt: hver bruger skal spare ${nf.format(c.breakEvenMin)} minutter om ugen, før værktøjet bare dækker sine egne omkostninger.</p>
-    <div style="margin-top:14px"><button class="btn" type="button" data-act="suggest-ass">Gør tallene til antagelser</button></div>
+    <div style="margin-top:14px"><button class="btn" type="button" data-act="suggest-ass">${SUGGEST_LABEL}</button></div>
   </div>`;
 }
 
@@ -335,7 +344,7 @@ function tabAss(p){
   const cells=[];
   for(let imp=3;imp>=1;imp--){for(let un=1;un<=3;un++){
     const inCell=as.filter(a=>(a.impact||2)==imp&&(a.uncertainty||2)==un);
-    cells.push(`<div class="cell ${imp>=2&&un>=2&&imp+un>=5?"hot":""}" aria-label="Betydning ${LVL[imp]}, usikkerhed ${LVL[un]}">${inCell.map(a=>`<span class="chip s-${a.status||"ikke"}" title="${esc(a.text)}">${num[a.id]}</span>`).join("")}</div>`)
+    cells.push(`<div class="cell ${imp>=2&&un>=2&&imp+un>=5?"hot":""}" aria-label="Betydning ${LVL[imp]}, usikkerhed ${LVL[un]}">${imp>=2&&un>=2&&imp+un>=5?`<span class="cell-tag">Test først</span>`:""}${inCell.map(a=>`<span class="chip s-${a.status||"ikke"}" role="img" title="${esc(a.text)}" aria-label="${num[a.id]} – ${STATUS[a.status||"ikke"]}: ${esc(a.text)}">${num[a.id]}${MARK[a.status]?" "+MARK[a.status]:""}</span>`).join("")}</div>`)
   }}
   const matrix=`<div class="matrix">
     <div class="axis yl" style="grid-row:1/4">Betydning: lav til høj</div>
@@ -345,27 +354,27 @@ function tabAss(p){
   const rows=as.map(a=>`<div class="a-row" id="a-${a.id}">
       <div class="a-num">${num[a.id]}</div>
       <div>
-        <div class="a-top"><textarea rows="2" data-k="a.${a.id}.text" aria-label="Antagelse" placeholder="Hvad skal være sandt?">${esc(a.text)}</textarea>
+        <div class="a-top"><textarea rows="2" data-k="a.${a.id}.text" aria-label="Antagelse ${num[a.id]}" placeholder="Hvad skal være sandt?">${esc(a.text)}</textarea>
           <button class="btn ghost danger" type="button" data-act="del-ass" data-id="${a.id}" aria-label="Slet antagelse ${num[a.id]}">Slet</button></div>
         <div class="a-fields">
-          <div><label class="f">Kategori</label><select data-k="a.${a.id}.cat">${Object.entries(CATS).map(([k,l])=>`<option value="${k}" ${a.cat===k?"selected":""}>${l}</option>`).join("")}</select></div>
-          <div><label class="f">Betydning</label><select data-k="a.${a.id}.impact" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.impact||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
-          <div><label class="f">Usikkerhed</label><select data-k="a.${a.id}.uncertainty" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.uncertainty||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
-          <div><label class="f">Forventet værdi</label><input type="text" data-k="a.${a.id}.expected" value="${esc(a.expected)}" placeholder="Fx 1,5 t/uge"></div>
-          <div><label class="f">Status</label><select data-k="a.${a.id}.status">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>
-          <div><label class="f">Faktisk værdi</label><input type="text" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Målt resultat"></div>
+          <div><label class="f" for="a-${a.id}-cat">Kategori</label><select id="a-${a.id}-cat" data-k="a.${a.id}.cat">${Object.entries(CATS).map(([k,l])=>`<option value="${k}" ${a.cat===k?"selected":""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="a-${a.id}-impact">Betydning</label><select id="a-${a.id}-impact" data-k="a.${a.id}.impact" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.impact||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
+          <div><label class="f" for="a-${a.id}-uncertainty">Usikkerhed</label><select id="a-${a.id}-uncertainty" data-k="a.${a.id}.uncertainty" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.uncertainty||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
+          <div><label class="f" for="a-${a.id}-expected">Forventet værdi</label><input type="text" id="a-${a.id}-expected" data-k="a.${a.id}.expected" value="${esc(a.expected)}" placeholder="Fx 1,5 t/uge"></div>
+          <div><label class="f" for="a-${a.id}-status">Status</label><select id="a-${a.id}-status" data-k="a.${a.id}.status">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="a-${a.id}-actual">Faktisk værdi</label><input type="text" id="a-${a.id}-actual" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Målt resultat"></div>
         </div>
       </div>
     </div>`).join("");
   return `<p class="lead">Skriv alt det, der skal være sandt, for at projektet lykkes. Antagelser med høj betydning og høj usikkerhed skal testes først, fordi de kan vælte projektet.</p>
-  <div class="two" style="grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)">
+  <div class="two ass">
     <div>
       <div class="row-actions" style="margin-bottom:6px"><button class="btn primary" type="button" data-act="add-ass">Tilføj antagelse</button>
-        <button class="btn" type="button" data-act="suggest-ass">Foreslå fra gevinstregnskabet</button></div>
-      ${as.length?rows+`<div style="border-top:1px solid var(--line)"></div>`:`<p class="empty">Ingen antagelser endnu. Start med at gøre tallene fra gevinstregnskabet til antagelser.</p>`}
+        <button class="btn" type="button" data-act="suggest-ass">${SUGGEST_LABEL}</button></div>
+      ${as.length?rows+`<div style="border-top:1px solid var(--line)"></div>`:`<p class="empty">Ingen antagelser endnu. Vælg "${SUGGEST_LABEL}", så bliver tallene fra gevinstregnskabet til de første antagelser.</p>`}
     </div>
     <div class="stack">
-      <div class="panel"><h3>Prioritering</h3><p class="small muted">Farvede felter er antagelser, der bør testes tidligt.</p>${matrix}</div>
+      <div class="panel"><h3>Prioritering</h3><p class="small muted">Felter mærket "Test først" har høj betydning og høj usikkerhed.</p>${matrix}<p class="small muted legend">✓ Holder · ½ Holder delvist · ✕ Holder ikke · uden tegn: ikke testet</p></div>
       ${prio.length?`<div class="panel"><h3>Test i denne rækkefølge</h3><ol style="margin:8px 0 0;padding-left:20px;font-size:14px">${prio.filter(a=>(a.status||"ikke")==="ikke").slice(0,5).map(a=>`<li style="margin-bottom:6px"><b>${num[a.id]}</b> ${esc(a.text||"Uden tekst")}</li>`).join("")||`<li class="muted" style="list-style:none;margin-left:-20px">Alle antagelser er testet.</li>`}</ol></div>`:""}
     </div>
   </div>`;
@@ -376,16 +385,17 @@ function tabMs(p){
   const path=ms.length?`<div class="panel" style="margin-bottom:8px"><div class="path"><div class="path-inner">${ms.map((m,i)=>`<button class="node" type="button" data-act="goto-ms" data-id="${m.id}"><div class="gate ${m.decision||""}"><span>${i+1}</span></div><div class="nm">${esc(m.name||"Milepæl")}</div><div class="dt">${m.decision?DEC[m.decision]:fmtDate(m.date)}</div></button>`).join("")}</div></div></div>`:"";
   const cards=ms.map((m,i)=>{
     const tests=as.filter(a=>m.tests&&m.tests[a.id]);
-    return `<section class="ms" id="ms-${m.id}">
-      <div class="ms-head"><span class="num">Milepæl ${i+1}</span>${m.decision?`<span class="pill ${m.decision==="fortsaet"?"ok":m.decision==="juster"?"warn":"bad"}">${DEC[m.decision]}</span>`:`<span class="pill">Afventer beslutning</span>`}<span class="spacer"></span><button class="btn ghost danger" type="button" data-act="del-ms" data-id="${m.id}">Slet</button></div>
+    const open=m.id in view.msOpen?view.msOpen[m.id]:!m.decision;
+    return `<details class="ms" id="ms-${m.id}" data-ms="${m.id}" ${open?"open":""}>
+      <summary class="ms-head"><span class="num">Milepæl ${i+1}</span><span class="ms-name">${esc(m.name||"Uden navn")}</span>${m.decision?`<span class="pill ${m.decision==="fortsaet"?"ok":m.decision==="juster"?"warn":"bad"}">${DEC[m.decision]}</span>`:`<span class="pill">Afventer beslutning</span>`}</summary>
       <div class="two">
         <div class="stack">
-          <div><label class="f">Navn</label><input type="text" data-k="m.${m.id}.name" value="${esc(m.name)}" placeholder="Fx klikbar prototype testet med 3 brugere"></div>
-          <div class="grid2"><div><label class="f">Planlagt dato</label><input type="date" data-k="m.${m.id}.date" data-full="1" value="${esc(m.date)}"></div>
-            <div><label class="f">Budget til milepælen</label><div style="display:flex;gap:6px;align-items:center"><input type="number" min="0" step="any" data-k="m.${m.id}.budget" data-num="1" value="${esc(m.budget)}"><span class="small muted">timer</span></div></div></div>
-          <div><label class="f">Hvad gør I, og hvordan måler I?</label><textarea data-k="m.${m.id}.desc" rows="3">${esc(m.desc)}</textarea></div>
+          <div><label class="f" for="m-${m.id}-name">Navn</label><input type="text" id="m-${m.id}-name" data-k="m.${m.id}.name" value="${esc(m.name)}" placeholder="Fx klikbar prototype testet med 3 brugere"></div>
+          <div class="grid2"><div><label class="f" for="m-${m.id}-date">Planlagt dato</label><input type="date" id="m-${m.id}-date" data-k="m.${m.id}.date" data-full="1" value="${esc(m.date)}"></div>
+            <div><label class="f" for="m-${m.id}-budget">Budget til milepælen</label><div style="display:flex;gap:6px;align-items:center"><input type="number" id="m-${m.id}-budget" min="0" step="any" data-k="m.${m.id}.budget" data-num="1" value="${esc(m.budget)}"><span class="small muted">timer</span></div></div></div>
+          <div><label class="f" for="m-${m.id}-desc">Hvad gør I, og hvordan måler I?</label><textarea id="m-${m.id}-desc" data-k="m.${m.id}.desc" rows="3">${esc(m.desc)}</textarea></div>
         </div>
-        <div><label class="f">Antagelser milepælen tester</label>
+        <div><span class="f">Antagelser milepælen tester</span>
           ${as.length?`<div class="tests">${as.map(a=>`<label><input type="checkbox" data-k="m.${m.id}.tests.${a.id}" ${m.tests&&m.tests[a.id]?"checked":""}><span><b>${num[a.id]}</b> ${esc(a.text||"Uden tekst")}</span></label>`).join("")}</div>`:`<p class="small muted">Tilføj antagelser først.</p>`}
         </div>
       </div>
@@ -395,12 +405,13 @@ function tabMs(p){
         ${tests.length?`<div style="margin:6px 0 12px">${tests.map(a=>`<div class="gate-a"><span><b>${num[a.id]}</b> ${esc(a.text)}${a.expected?` <span class="muted">(forventet: ${esc(a.expected)})</span>`:""}</span>
           <input type="text" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Faktisk værdi" aria-label="Faktisk værdi for ${num[a.id]}">
           <select data-k="a.${a.id}.status" aria-label="Status for ${num[a.id]}">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>`).join("")}</div>`:""}
-        <label class="f">Resultat og læring</label><textarea data-k="m.${m.id}.result" rows="2" placeholder="Hvad viste testen?">${esc(m.result)}</textarea>
+        <label class="f" for="m-${m.id}-result">Resultat og læring</label><textarea id="m-${m.id}-result" data-k="m.${m.id}.result" rows="2" placeholder="Hvad viste testen?">${esc(m.result)}</textarea>
         <div class="choice" role="group" aria-label="Beslutning">${Object.entries(DEC).map(([k,l])=>`<button type="button" class="${k}" aria-pressed="${m.decision===k}" data-act="decide" data-id="${m.id}" data-dec="${k}">${l}</button>`).join("")}</div>
-        <label class="f">Begrundelse</label><textarea data-k="m.${m.id}.rationale" rows="2" placeholder="Hvorfor denne beslutning?">${esc(m.rationale)}</textarea>
+        <label class="f" for="m-${m.id}-why">Begrundelse</label><textarea id="m-${m.id}-why" data-k="m.${m.id}.rationale" rows="2" placeholder="Hvorfor denne beslutning?">${esc(m.rationale)}</textarea>
         ${m.decision?`<p class="small muted" style="margin:8px 0 0">Besluttet af ${esc(nameOf(m.decidedBy))} ${fmtTs(m.decidedAt)}. <button class="btn ghost small" type="button" data-act="undecide" data-id="${m.id}" style="padding:2px 6px">Fortryd beslutning</button></p>`:""}
       </div>
-    </section>`}).join("");
+      <div class="row-actions" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost danger" type="button" data-act="del-ms" data-id="${m.id}">Slet milepæl</button></div>
+    </details>`}).join("");
   return `<p class="lead">Hver milepæl er et billigt eksperiment, der tester en eller flere antagelser. Når den er nået, sammenligner I resultatet med antagelserne og beslutter, om projektet fortsætter, justeres eller stoppes, før der bruges flere ressourcer.</p>
     ${path}
     <div class="row-actions" style="margin:14px 0 6px"><button class="btn primary" type="button" data-act="add-ms">Tilføj milepæl</button>${ms.length?"":`<button class="btn" type="button" data-act="std-ms">Brug standardforløb</button>`}</div>
@@ -476,6 +487,7 @@ function onField(e){
 }
 document.addEventListener("input",onField);
 document.addEventListener("change",onField);
+document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.ms)view.msOpen[d.dataset.ms]=d.open},true);
 document.addEventListener("keydown",e=>{
   const el=e.target;if(!el.dataset||!el.dataset.tagin||!view.pid)return;
   if(e.key!=="Enter"&&e.key!==",")return;
@@ -495,11 +507,13 @@ document.addEventListener("click",async e=>{
   if(act==="set-name")return saveName();
   if(act==="change-name"){askName=true;render();const i=$("#my-name");if(i){i.focus();i.select()}return}
   if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
-  if(act==="home-tab"){view.home=b.dataset.home;setHash();render();return}
-  if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);return}
-  if(act==="home"){flushAll();view.pid=null;setHash();render();return}
-  if(act==="open"){view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);return}
-  if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();return}
+  if(act==="close-toast"){$("#toast").classList.remove("show");return}
+  if(act==="home-tab"){view.home=b.dataset.home;setHash();render();afterRoute();return}
+  if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);afterRoute();return}
+  if(act==="home"){flushAll();view.pid=null;setHash();render();afterRoute();return}
+  if(act==="open"){view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);afterRoute();return}
+  if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();afterRoute();return}
+  if(act==="new-project"){view.home="projekter";setHash();render();const i=$("#np-name");if(i){i.scrollIntoView({block:"center"});i.focus({preventScroll:true})}return}
   if(act==="export-json")return exportJson();
   if(act==="export-csv")return exportCsv();
   if(!canEdit())return;
@@ -519,7 +533,7 @@ document.addEventListener("click",async e=>{
   if(act==="add-ass"){const id=addAssumption(p,{});render();const t=document.querySelector(`[data-k="a.${id}.text"]`);if(t)t.focus();return}
   if(act==="add-tag"){const i=$("#tag-in");addTag(view.pid,i.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();return}
   if(act==="del-tag"){removeTag(view.pid,b.dataset.tag);render();return}
-  if(act==="del-ass"){queuePatch(view.pid,{assumptions:{[b.dataset.id]:{deleted:true}}},0);render();return}
+  if(act==="del-ass"){if(!confirm(`Slet antagelse ${aNum(p)[b.dataset.id]||""}? Den fjernes også fra de milepæle, der tester den.`))return;queuePatch(view.pid,{assumptions:{[b.dataset.id]:{deleted:true}}},0);render();return}
   if(act==="suggest-ass"){
     const c=calc(rev(p));
     const sug=[
@@ -541,7 +555,7 @@ document.addEventListener("click",async e=>{
     queuePatch(view.pid,patch,0);render();return;
   }
   if(act==="del-ms"){if(!confirm("Slet milepælen?"))return;queuePatch(view.pid,{milestones:{[b.dataset.id]:{deleted:true}}},0);render();return}
-  if(act==="goto-ms"){const el=document.getElementById("ms-"+b.dataset.id);if(el)el.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});return}
+  if(act==="goto-ms"){const el=document.getElementById("ms-"+b.dataset.id);if(el){el.open=true;view.msOpen[b.dataset.id]=true}if(el)el.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});return}
   if(act==="decide"){const d=b.dataset.dec;queuePatch(view.pid,{milestones:{[b.dataset.id]:{decision:d,decidedBy:meId||null,decidedAt:Date.now()}}},0);render();toast(`Beslutning registreret: ${DEC[d]}.`);return}
   if(act==="undecide"){queuePatch(view.pid,{milestones:{[b.dataset.id]:{decision:"",decidedBy:null,decidedAt:null}}},0);render();return}
 });
@@ -571,7 +585,13 @@ function exportCsv(){
 }
 
 /* ---------- misc ---------- */
-let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2600)}
+/* bekræftelser forsvinder af sig selv; fejl bliver stående, til de lukkes */
+let tt;function toast(m,o){
+  const t=$("#toast"),err=!!(o&&o.error);
+  t.innerHTML=esc(m)+(err?` <button type="button" data-act="close-toast">Luk</button>`:"");
+  t.classList.toggle("err",err);t.classList.add("show");clearTimeout(tt);
+  if(!err)tt=setTimeout(()=>t.classList.remove("show"),2600);
+}
 /* hash: [demo-]p-<id>-<fane>; demo-visningen har præfikset "demo" */
 function setHash(){
   const body=view.pid?`p-${view.pid}-${view.tab}`:view.home==="katalog"?"katalog":"";
@@ -593,7 +613,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,httpBackend,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()},
   setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };
