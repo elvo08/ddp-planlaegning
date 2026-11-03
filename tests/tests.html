@@ -79,9 +79,10 @@ test("live-snapshot i demo ændrer ikke det viste", () => {
 });
 test("læseadgang: må redigere i demo, ikke i live", () => {
   window.__canWrite = false; DDP.setCanWrite(false);
-  DDP.setMode("demo"); eq(document.querySelector("fieldset.all").disabled, false);
-  DDP.setMode("live"); eq(document.querySelector("fieldset.all").disabled, true);
-  DDP.setCanWrite(true); window.__canWrite = true;
+  DDP.setMode("demo"); DDP.readHashFrom("#demo-p-demo-lager"); DDP.render(); eq(document.querySelector("fieldset.all").disabled, false);
+  DDP.setMode("live"); window.__snap({docs:[fakeDoc("ro1",{name:"RO"})], size:1, metadata:{fromCache:false}}); DDP.readHashFrom("#p-ro1"); DDP.render();
+  eq(document.querySelector("fieldset.all").disabled, true);
+  DDP.setCanWrite(true); window.__canWrite = true; DDP.readHashFrom(""); DDP.render();
 });
 test("#demo i adressen åbner demo", () => { DDP.setMode("live"); DDP.readHashFrom("#demo-katalog"); eq(DDP.state().mode, "demo"); });
 test("banner vises kun i demo", () => {
@@ -151,18 +152,11 @@ test("demo: tests-referencer peger på eksisterende antagelser", () => {
     Object.values(p.milestones||{}).forEach(m => Object.keys(m.tests||{}).forEach(a => ok(p.assumptions[a], `${p.name}: ${a}`)));
 });
 
-test("forsiden viser projektlisten før Nyt projekt", () => {
-  DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.render();
-  const h = document.getElementById("app").innerHTML;
-  ok(h.indexOf("proj-list") >= 0 && h.indexOf("proj-list") < h.indexOf("Nyt projekt"));
-  DDP.setMode("live");
-});
 
 /* Final review */
 test("I1: oprettelse i live og skift til demo blander ikke data", async () => {
-  DDP.setMode("live"); DDP.readHashFrom(""); DDP.render();
-  document.getElementById("np-name").value = "Rigtigt";
-  document.querySelector('[data-act="create"]').click();
+  DDP.setMode("live"); DDP.readHashFrom("#nyt"); DDP.render();
+  setField("p.name", "Rigtigt"); act("wiz-next"); act("wiz-next"); act("wiz-next"); act("wiz-finish");
   DDP.setMode("demo"); await tick(); await tick();
   eq(DDP.state().mode, "demo"); eq(DDP.state().view.pid, null, "projektet åbnes ikke i demo");
   ok(!Object.values(DDP.state().projects).some(p => p.name === "Rigtigt"), "ikke i demolisten");
@@ -281,15 +275,6 @@ test("design: projekthovedet har kun titel, status og afdeling", () => {
   ok(!head.includes('data-act="del-project"'), "Slet projekt er ikke i hovedet");
   ok(appEl().querySelector('[data-act="del-project"]'), "Slet projekt findes stadig");
 });
-test("design: problembeskrivelsen er første felt i trin 1", () => {
-  openDemo("#demo-p-demo-lager-gevinst");
-  const first = appEl().querySelector(".steps ~ fieldset [data-k]");
-  eq(first && first.dataset.k, "p.description");
-});
-test("design: resultatet står før tallene i trin 1", () => {
-  openDemo("#demo-p-demo-lager-gevinst"); const h = appEl().innerHTML;
-  ok(h.indexOf("timer om ugen") < h.indexOf('data-k="rev.targetNet"'));
-});
 test("design: besluttede milepæle er foldet sammen, åbne er foldet ud", () => {
   openDemo("#demo-p-demo-retur-milepaele");
   const d = [...appEl().querySelectorAll("details.ms")];
@@ -298,8 +283,8 @@ test("design: besluttede milepæle er foldet sammen, åbne er foldet ud", () => 
 test("design: samme navn for 'lav antagelser' begge steder", () => {
   openDemo("#demo-p-demo-lager-gevinst");
   const a = appEl().querySelector('[data-act="suggest-ass"]').textContent.trim();
-  openDemo("#demo-p-demo-lager-antagelser");
-  eq(appEl().querySelector('[data-act="suggest-ass"]').textContent.trim(), a);
+  openDemo("#demo-nyt"); setField("p.name", "Navnetest"); act("wiz-next"); act("wiz-next");
+  eq(appEl().querySelector('[data-act="suggest-ass"]').textContent.trim(), a); DDP.setMode("live");
 });
 test("design: fejlbeskeder bliver stående, til de lukkes", async () => {
   DDP.toast("Ændringen kunne ikke gemmes. Prøv igen.", {error:true});
@@ -452,6 +437,55 @@ test("noter: demo skriver intet", async () => {
   window.__writes.length = 0; DDP.addNote("p", id, "demo-note"); DDP.flushAll(); await tick();
   eq(window.__writes.length, 0); ok(Object.values(DDP.state().projects[id].notes).some(n => n.text === "demo-note"));
   DDP.setMode("live");
+});
+
+/* Oprettelsesforløbet */
+const setField = (k, v) => { const el = appEl().querySelector(`[data-k="${k}"]`); el.value = v; el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", {bubbles:true})); };
+const act = a => appEl().querySelector(`[data-act="${a}"]`).click();
+test("forløb: #nyt åbner trin 1, og forsiden har ingen Nyt projekt-formular", () => {
+  DDP.setMode("live"); window.__snap({docs:[], size:0, metadata:{fromCache:false}}); DDP.readHashFrom(""); DDP.render();
+  ok(!appEl().querySelector("#np-name"), "ingen formular på forsiden"); act("new-project");
+  eq(DDP.state().view.wiz.mode, "new"); eq(DDP.state().view.wiz.step, 1); eq(location.hash, "#nyt");
+  ok(appEl().querySelector("#np-name")); ok(/Projekt/.test(appEl().querySelector(".step[aria-current]").textContent));
+  ok(document.title.startsWith("Opret projekt"));
+});
+test("forløb: i demo oprettes projektet kun i hukommelsen", async () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo-nyt"); DDP.render(); eq(location.hash, "#demo-nyt");
+  setField("p.name", "Demo-forløb"); window.__writes.length = 0; act("wiz-next"); act("wiz-next"); act("wiz-next"); act("wiz-finish"); await tick();
+  eq(window.__writes.length, 0); ok(Object.values(DDP.state().projects).some(p => p.name === "Demo-forløb")); DDP.setMode("live");
+});
+test("forløb: uden navn kommer man ikke videre", () => {
+  DDP.readHashFrom("#nyt"); DDP.render();
+  act("wiz-next"); eq(DDP.state().view.wiz.step, 1); ok(document.getElementById("toast").textContent.includes("navn"));
+});
+test("forløb: trin 2 regner med det samme, trin 3 foreslår antagelser, trin 4 har standardmilepæle", () => {
+  setField("p.name", "Forløbstest"); setField("p.department", "Test"); act("wiz-next"); eq(DDP.state().view.wiz.step, 2);
+  setField("rev.rate", "500"); eq(DDP.state().view.wiz.draft.rev.rate, 500); ok(appEl().querySelector("#rev-out").textContent.includes("timer om ugen"));
+  act("wiz-next"); act("suggest-ass"); eq(Object.keys(DDP.state().view.wiz.draft.assumptions).length, 5);
+  ok(!appEl().querySelector('[data-k^="a."][data-k$=".status"]'), "ingen statusfelter i forløbet");
+  ok(appEl().textContent.includes("Test i denne rækkefølge"));
+  act("wiz-next"); act("std-ms"); eq(Object.keys(DDP.state().view.wiz.draft.milestones).length, 4);
+  ok(!appEl().querySelector(".gatebox"), "ingen beslutningspunkt i forløbet");
+  const aid = Object.keys(DDP.state().view.wiz.draft.assumptions)[0], mid = Object.keys(DDP.state().view.wiz.draft.milestones)[0];
+  const cb = appEl().querySelector(`[data-k="m.${mid}.tests.${aid}"]`); cb.checked = true; cb.dispatchEvent(new Event("change", {bubbles:true}));
+  eq(DDP.state().view.wiz.draft.milestones[mid].tests[aid], true);
+});
+test("forløb: intet er skrevet før Opret projekt, og ét set skriver alt", async () => {
+  window.__writes.length = 0; eq(Object.keys(DDP.state().projects).length, 0);
+  act("wiz-finish"); await tick(); await tick();
+  eq(window.__writes.length, 1); eq(window.__writes[0].op, "set");
+  const p = window.__writes[0].p; eq(p.name, "Forløbstest"); eq(p.rev.rate, 500); eq(Object.keys(p.assumptions).length, 5); eq(Object.keys(p.milestones).length, 4); eq(p.feedback, {}); eq(p.createdBy, "me");
+  eq(DDP.state().view.wiz, null); ok(DDP.state().view.pid, "projektsiden er åben"); ok(location.hash.startsWith("#p-"));
+});
+test("forløb: annullér og visningsskift skriver intet", async () => {
+  DDP.readHashFrom("#nyt"); DDP.render(); setField("p.name", "Kasseret"); window.__writes.length = 0;
+  act("wiz-cancel"); await tick(); eq(DDP.state().view.wiz, null); eq(window.__writes.length, 0); eq(DDP.state().view.pid, null);
+  DDP.readHashFrom("#nyt"); DDP.render(); setField("p.name", "Kasseret 2"); DDP.setMode("demo"); await tick();
+  eq(DDP.state().view.wiz, null); eq(window.__writes.length, 0); ok(!Object.values(DDP.state().projects).some(p => p.name === "Kasseret 2"));
+  DDP.setMode("live");
+});
+test("forløb: læseadgang i live viser ikke Opret projekt", () => {
+  DDP.setCanWrite(false); DDP.readHashFrom(""); DDP.render(); ok(!appEl().querySelector('[data-act="new-project"]')); DDP.setCanWrite(true);
 });
 
 runAll();
