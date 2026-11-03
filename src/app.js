@@ -35,7 +35,9 @@ const DEMO=window.DDP_DEMO||{projects:{},people:{}};
 const inMemory=()=>localMode||mode==="demo";
 const canEdit=()=>mode==="demo"||canWrite;
 const names=Object.assign({},DEMO.people);
-const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""},msOpen:{}};
+/* filtre på projektoversigten; gemmes ikke, nulstilles ved skift mellem demo og live */
+function emptyPfilter(){return {q:"",dep:"",status:[],sort:"updated"}}
+const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""},pfilter:emptyPfilter(),msOpen:{}};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
@@ -96,7 +98,7 @@ function calc(r){
 }
 function status(p){
   const dec=listOf(p.milestones).filter(m=>m.decision&&m.decidedAt).sort((a,b)=>b.decidedAt-a.decidedAt);
-  if(!dec.length)return listOf(p.assumptions).length?["I test","acc"]:["Under planlægning",""];
+  if(!dec.length)return listOf(p.assumptions).length?["I test","info"]:["Under planlægning",""];
   const d=dec[0].decision;
   if(d==="fortsaet"&&p.build&&p.build.live)return ["I drift","ok"];
   return d==="stop"?["Stoppet","bad"]:d==="juster"?["Justeres","warn"]:["Fortsætter","ok"];
@@ -189,10 +191,47 @@ function applyMode(m){
   projects=m==="demo"?demoProjects:liveProjects;
 }
 function setMode(m){
-  flushAll();applyMode(m);view.pid=null;view.home="projekter";view.filter={dep:"",tech:"",q:""};setHash();render();
+  flushAll();applyMode(m);view.pid=null;view.home="projekter";view.filter={dep:"",tech:"",q:""};view.pfilter=emptyPfilter();setHash();render();
 }
 
 const fieldset=html=>`<fieldset class="all" ${canEdit()?"":"disabled"}>${html}</fieldset>`;
+
+/* statusser i den rækkefølge et projekt bevæger sig igennem */
+const STAGES=["Under planlægning","I test","Justeres","Fortsætter","I drift","Stoppet"];
+const SORTS=[["updated","Senest ændret"],["next","Næste milepæl"],["progress","Længst fremme"],["name","Navn"]];
+const nextMs=p=>msSorted(p).find(m=>!m.decision);
+function progressOf(p){const as=listOf(p.assumptions);return as.length?as.filter(a=>a.status&&a.status!=="ikke").length/as.length:-1}
+function projectItems(obj,f){
+  f=f||{};
+  const q=String(f.q||"").trim().toLowerCase(),st=f.status||[];
+  const byUpdated=(a,b)=>(b.updatedAt||0)-(a.updatedAt||0);
+  const sorts={
+    updated:byUpdated,
+    name:(a,b)=>String(a.name||"").localeCompare(String(b.name||""),"da"),
+    progress:(a,b)=>progressOf(b)-progressOf(a)||byUpdated(a,b),
+    next:(a,b)=>{const x=(nextMs(a)||{}).date||"9999",y=(nextMs(b)||{}).date||"9999";return x.localeCompare(y)||byUpdated(a,b)}
+  };
+  return Object.entries(obj||{}).map(([id,p])=>Object.assign({id},p))
+    .filter(p=>!st.length||st.includes(status(p)[0]))
+    .filter(p=>!f.dep||p.department===f.dep)
+    .filter(p=>!q||[p.name,p.department,p.description].some(x=>String(x||"").toLowerCase().includes(q)))
+    .sort(sorts[f.sort]||byUpdated);
+}
+function renderProjectFilters(all,shown){
+  const f=view.pfilter,counts={};
+  all.forEach(p=>{const s=status(p)[0];counts[s]=(counts[s]||0)+1});
+  const deps=[...new Set(all.map(p=>p.department).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"da"));
+  const active=f.q||f.dep||f.status.length;
+  return `<div class="pf">
+      <div class="pf-row">
+        <input type="search" data-k="pf.q" value="${esc(f.q)}" placeholder="Søg i projekter" aria-label="Søg i projekter">
+        <select data-k="pf.dep" aria-label="Afdeling"><option value="">Alle afdelinger</option>${deps.map(d=>`<option value="${esc(d)}" ${f.dep===d?"selected":""}>${esc(d)}</option>`).join("")}</select>
+        <select data-k="pf.sort" aria-label="Sortér efter">${SORTS.map(([k,l])=>`<option value="${k}" ${f.sort===k?"selected":""}>Sortér: ${l}</option>`).join("")}</select>
+      </div>
+      <div class="pf-status" role="group" aria-label="Status">${STAGES.filter(s=>counts[s]||f.status.includes(s)).map(s=>`<button type="button" class="pf-chip" data-act="pf-status" data-status="${s}" aria-pressed="${f.status.includes(s)}">${s} <b>${counts[s]||0}</b></button>`).join("")}</div>
+      <div class="pf-sum"><span>Viser ${shown.length} af ${all.length} projekter</span>${active?`<button type="button" class="linkbtn" data-act="pf-reset">Nulstil filtre</button>`:""}</div>
+    </div>`;
+}
 
 /* katalog: projekter med beskrivelse eller tech stack, filtreret */
 function catalogItems(obj,f){
@@ -228,8 +267,8 @@ function renderCatalog(){
 }
 
 function renderOverview(){
-  const list=Object.entries(projects).map(([id,p])=>Object.assign({id},p)).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
-  const rows=list.map(p=>{
+  const list=projectItems(projects,{}),shown=projectItems(projects,view.pfilter);
+  const rows=shown.map(p=>{
     const [st,cls]=status(p);
     const as=listOf(p.assumptions),tested=as.filter(a=>a.status&&a.status!=="ikke").length;
     const next=msSorted(p).find(m=>!m.decision);
@@ -244,8 +283,9 @@ function renderOverview(){
       ${canEdit()?`<button class="btn primary" data-act="new-project" type="button">Opret projekt</button>`:""}
     </div>
     <nav class="hometabs" role="tablist">${[["projekter","Projekter",list.length],["katalog","Værktøjskatalog",catalogItems(projects,{}).length]].map(([k,l,n])=>`<button type="button" role="tab" aria-selected="${view.home===k}" data-act="home-tab" data-home="${k}">${l} <span class="muted">(${n})</span></button>`).join("")}</nav>
-    ${view.home==="katalog"?renderCatalog():`    ${list.length?`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`
-      :`<p class="empty">Der er ingen projekter endnu. Opret det første nedenfor.</p>`}
+    ${view.home==="katalog"?renderCatalog():`    ${list.length?renderProjectFilters(list,shown):""}
+    ${!list.length?"":!shown.length?`<p class="empty">Ingen projekter matcher filtrene.</p>`:`<div class="proj-list"><div class="proj-row proj-head"><div>Projekt</div><div>Status</div><div>Antagelser</div><div>Næste milepæl</div></div>${rows}</div>`}
+    ${list.length?"":`<p class="empty">Der er ingen projekter endnu. Opret det første nedenfor.</p>`}
     ${list.length?`<details class="exports"><summary>Eksportér data</summary><div class="row-actions"><button class="btn" data-act="export-json" type="button">Alle data (JSON)</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button></div></details>`:""}
     ${fieldset(`<div class="panel" style="margin-top:28px">
       <h2>Nyt projekt</h2><p class="muted small">Et projekt er en idé til et internt værktøj fra en afdeling.</p>
@@ -254,7 +294,7 @@ function renderOverview(){
         <div><label class="f" for="np-dep">Afdeling</label><input type="text" id="np-dep" placeholder="Fx Indkøb"></div>
       </div>
       <div style="margin-top:14px"><label class="f" for="np-desc">Hvilket problem skal værktøjet løse?</label><textarea id="np-desc" rows="2"></textarea></div>
-      <div style="margin-top:14px"><button class="btn primary" data-act="create" type="button">Opret projekt</button></div>
+      <div style="margin-top:14px"><button class="btn" data-act="create" type="button">Gem projekt</button></div>
     </div>`)}`}`;
 }
 
@@ -470,6 +510,10 @@ function patchFromKey(k,v){
 }
 function onField(e){
   const el=e.target;const k=el.dataset&&el.dataset.k;
+  if(k&&k.startsWith("pf.")){
+    if(e.type==="input"&&el.tagName==="SELECT")return;
+    view.pfilter[k.slice(3)]=el.value;render();return;
+  }
   if(k&&k.startsWith("filter.")){
     if(e.type==="input"&&el.tagName==="SELECT")return;
     view.filter[k.slice(7)]=el.value;render();return;
@@ -507,6 +551,8 @@ document.addEventListener("click",async e=>{
   if(act==="set-name")return saveName();
   if(act==="change-name"){askName=true;render();const i=$("#my-name");if(i){i.focus();i.select()}return}
   if(act==="mode"){if(b.dataset.mode!==mode){setMode(b.dataset.mode);window.scrollTo(0,0)}return}
+  if(act==="pf-status"){const s=b.dataset.status,st=view.pfilter.status;view.pfilter.status=st.includes(s)?st.filter(x=>x!==s):st.concat(s);render();return}
+  if(act==="pf-reset"){view.pfilter=emptyPfilter();render();return}
   if(act==="close-toast"){$("#toast").classList.remove("show");return}
   if(act==="home-tab"){view.home=b.dataset.home;setHash();render();afterRoute();return}
   if(act==="open-build"){flushAll();view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);afterRoute();return}
@@ -613,7 +659,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()},
   setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };

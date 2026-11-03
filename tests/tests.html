@@ -316,6 +316,49 @@ test("design: fanetitel og fokus følger visningen", () => {
   DDP.setMode("live");
 });
 
+/* Filtre på projektoversigten */
+const PF = {
+  a:{name:"Lager", department:"Indkøb", updatedAt:3, assumptions:{x:{status:"holder"},y:{status:"ikke"}},
+     milestones:{m:{name:"M", date:"2026-12-01"}}},
+  b:{name:"Bilag", department:"Økonomi", updatedAt:1, description:"afstemning af bilag",
+     assumptions:{x:{status:"holder"}}, milestones:{m:{decision:"stop", decidedAt:5}}},
+  c:{name:"Ansøgning", department:"HR", updatedAt:2},
+  d:{name:"Tekster", department:"Marketing", updatedAt:4, assumptions:{x:{status:"ikke"}},
+     milestones:{m:{name:"N", date:"2026-11-10"}}}
+};
+const ids = r => r.map(x => x.id);
+test("filtre: standard er alle, senest ændret først", () => eq(ids(DDP.projectItems(PF, {})), ["d","a","c","b"]));
+test("filtre: flere statusser på én gang", () => eq(ids(DDP.projectItems(PF, {status:["I test","Stoppet"]})), ["d","a","b"]));
+test("filtre: afdeling", () => eq(ids(DDP.projectItems(PF, {dep:"HR"})), ["c"]));
+test("filtre: søgning i problembeskrivelsen", () => eq(ids(DDP.projectItems(PF, {q:"AFSTEMNING"})), ["b"]));
+test("filtre: sortering efter næste milepæl, uden dato sidst", () => eq(ids(DDP.projectItems(PF, {sort:"next"})), ["d","a","c","b"]));
+test("filtre: sortering efter længst fremme", () => eq(ids(DDP.projectItems(PF, {sort:"progress"})), ["b","a","d","c"]));
+test("filtre: sortering efter navn", () => eq(ids(DDP.projectItems(PF, {sort:"name"})), ["c","b","a","d"]));
+test("filtre: statusknapper med antal, valg og nulstil", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.render();
+  const chip = () => document.querySelector('[data-act="pf-status"][data-status="I drift"]');
+  ok(chip(), "knap for I drift"); ok(/2/.test(chip().textContent), "antal 2"); eq(chip().getAttribute("aria-pressed"), "false");
+  chip().click();
+  eq(chip().getAttribute("aria-pressed"), "true");
+  eq(document.querySelectorAll(".proj-list .proj-row:not(.proj-head)").length, 2);
+  ok(appEl().textContent.includes("Viser 2 af 6 projekter"));
+  document.querySelector('[data-act="pf-reset"]').click();
+  eq(document.querySelectorAll(".proj-list .proj-row:not(.proj-head)").length, 6);
+});
+test("filtre: ingen match giver en tydelig besked", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.state().view.pfilter.q = "findes-ikke-xyz"; DDP.render();
+  ok(appEl().textContent.includes("Ingen projekter matcher filtrene."));
+});
+test("filtre: nulstilles ved skift af visning", () => {
+  DDP.state().view.pfilter.dep = "HR"; DDP.setMode("live");
+  eq(DDP.state().view.pfilter, {q:"", dep:"", status:[], sort:"updated"});
+});
+test("farver: I test har sin egen farve, ikke accent", () => eq(DDP.status({assumptions:{x:{}}}), ["I test","info"]));
+test("farver: kun én fyldt knap på forsiden", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.render();
+  eq(appEl().querySelectorAll(".btn.primary").length, 1); DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>
