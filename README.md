@@ -11,6 +11,7 @@ Det er et MVP. Alt brugervendt sprog er dansk.
 - **Milepæle med beslutningspunkter.** Hver milepæl tester bestemte antagelser og afsluttes med en beslutning: Fortsæt, Justér eller Stop. Beslutningen gemmes med navn og tidspunkt.
 - **Sådan er det bygget.** Når værktøjet er færdigt, beskrives tech stack, genbrugelige dele og læringer, så kolleger kan bygge videre.
 - **Evaluering.** Brugerne vurderer, om metoden hjalp. Svarene bruges som empiri om selve metoden.
+- **Noter.** Projektet, hver antagelse og hver milepæl kan få noter med navn og tidspunkt, så kontekst og ny viden skrives ned, hvor den hører til.
 - **Projektoversigt og værktøjskatalog.** Forsiden viser alle projekter med status og filtre, og kataloget viser de dokumenterede værktøjer på tværs af afdelinger.
 
 ## Metoden: Discovery-Driven Planning
@@ -38,31 +39,31 @@ Artiklen fra 1995 beskriver fire dokumenter, der hænger sammen, og en disciplin
 **1. Den omvendte resultatopgørelse (reverse income statement).**
 *Hvad:* I stedet for at estimere omsætning og omkostninger og se, hvad der bliver tilbage, starter man med den gevinst, projektet skal give for at være umagen værd. Derfra regner man baglæns: hvilken bruttogevinst kræver det, og hvad må projektet så højst koste?
 *Hvorfor:* Et almindeligt budget starter med det, man tror, man kan opnå, og ender ofte med et resultat, der ser fint ud på papiret. Det omvendte regnestykke tvinger én til at tage stilling til, hvad der *skal* være sandt, og gør kravene synlige, før der er brugt penge. Det er også her, projektet kan stoppes tidligst: hvis de krævede tal er urealistiske, er der ingen grund til at gå videre.
-*I værktøjet:* Fanen **Gevinstregnskab**. Krævet nettogevinst og margin giver bruttogevinst og tilladte omkostninger, og timeprisen oversætter det til, hvor mange timer hver bruger skal spare om ugen.
+*I værktøjet:* Trin 2, **Gevinst**, i oprettelsesforløbet, og boksen **Planen** på projektsiden. Krævet nettogevinst og margin giver bruttogevinst og tilladte omkostninger, og timeprisen oversætter det til, hvor mange timer hver bruger skal spare om ugen.
 
 **2. Specifikation af driften (pro forma operations specifications).**
 *Hvad:* Hvilke aktiviteter skal der til for at levere gevinsten, og hvad koster de? For et internt værktøj er det udviklingstid, engangsudgifter, vedligehold og drift.
 *Hvorfor:* Omkostningerne i det omvendte regnestykke må ikke være et rundt tal. De skal udledes af, hvad der faktisk skal gøres, så man kan se, om de tilladte omkostninger er nok til at gøre det.
-*I værktøjet:* Felterne under **Forventede omkostninger** på gevinstfanen. Værktøjet sammenligner dem med de tilladte omkostninger og viser, om der er plads, og hvad nulpunktet er.
+*I værktøjet:* Felterne under **Forventede omkostninger** i trin 2. Værktøjet deler dem i løbende omkostninger pr. år og engangsudgift, sammenligner de løbende med de tilladte og viser råderummet, tilbagebetalingstiden og nulpunktet.
 
 **3. Tjeklisten over nøgleantagelser (key assumptions checklist).**
 *Hvad:* Hver antagelse, som regnestykket og driften hviler på, skrives ned som en konkret, testbar påstand: hvor mange brugere, hvor mange sparede timer, hvor mange udviklingstimer, hvor meget vedligehold.
 *Hvorfor:* Antagelser, der ikke er skrevet ned, bliver til fakta i folks hoveder. Listen gør det muligt at prioritere: de antagelser, der betyder mest og er mest usikre, skal testes først, fordi de kan vælte projektet billigst. Listen er også det sted, hvor ny viden skrives ind, så planen ændrer sig, når virkeligheden gør.
-*I værktøjet:* Fanen **Antagelser**. Hver antagelse har kategori, betydning, usikkerhed, forventet og faktisk værdi og en status. Knappen "Lav antagelser ud fra tallene" laver de første antagelser direkte fra gevinstregnskabet, så regnestykke og antagelser hænger sammen fra start.
+*I værktøjet:* Trin 3, **Antagelser**, i forløbet (tekst, kategori, betydning, usikkerhed, forventet værdi) og sektionen **Antagelser** på projektsiden (status og faktisk værdi). Knappen "Lav antagelser ud fra tallene" laver de første antagelser direkte fra gevinstregnskabet, så regnestykke og antagelser hænger sammen fra start.
 
 **4. Milepælsplanen (milestone planning chart).**
 *Hvad:* En plan over milepæle, hvor hver milepæl er knyttet til de antagelser, den tester. Milepælene lægges, så de vigtigste og mest usikre antagelser testes først og billigst.
 *Hvorfor:* En milepæl er i DDP ikke "prototypen er færdig", men "ved prototypen finder vi ud af, om brugerne forstår og vil bruge løsningen". Den kobling gør, at man ved, hvad man skal måle, og at man ikke bygger videre på antagelser, der aldrig blev testet. Det er samtidig her, pengene frigives: hver milepæl giver grundlag for at beslutte, om den næste portion er værd at bruge.
-*I værktøjet:* Fanen **Milepæle og beslutninger**. Hver milepæl vælger, hvilke antagelser den tester, og de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot) følger princippet om billigste test først.
+*I værktøjet:* Trin 4, **Milepæle**, i forløbet. Hver milepæl vælger, hvilke antagelser den tester, og de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot) følger princippet om billigste test først.
 
 **5. Opdatering og beslutning ved hver milepæl.**
 *Hvad:* Når en milepæl er nået, føres resultatet tilbage i antagelseslisten og regnestykket. Holder antagelsen? Holder den delvist? Holder den ikke? Derefter træffes en beslutning: fortsæt, justér planen, eller stop.
 *Hvorfor:* Det er den disciplin, der adskiller DDP fra at lave en plan og lægge den i skuffen. McGrath og MacMillan lægger vægt på, at det skal være legitimt at stoppe eller ændre retning, og at det skal ske tidligt, mens det er billigt. Bogen fra 2009 kalder det at vide, hvornår man skal trække sig fra et tvivlsomt projekt, før det er for sent. En plan, der aldrig fører til et stop, er ikke blevet testet.
-*I værktøjet:* Status på hver antagelse, og beslutningen Fortsæt, Justér eller Stop på hver milepæl, med begrundelse, navn og tidspunkt. Projektets samlede status udledes af den seneste beslutning.
+*I værktøjet:* Sektionen **Milepæle og beslutninger** på projektsiden. I hver milepæl sættes status og faktisk værdi på de antagelser, den tester, resultatet skrives, og beslutningen Fortsæt, Justér eller Stop træffes med begrundelse, navn og tidspunkt. Ny viden skrives som noter, og planen rettes via "Ret planen". Projektets samlede status udledes af den seneste beslutning.
 
 ### Hvad værktøjet tilføjer ud over metoden
 
-To faner er ikke en del af DDP, men er tilføjet til formålet her:
+To sektioner er ikke en del af DDP, men er tilføjet til formålet her:
 
 - **Sådan er det bygget** samler viden om de færdige værktøjer, så andre afdelinger kan genbruge dele og undgå at bygge det samme igen.
 - **Evaluering** spørger brugerne, om metoden hjalp dem med at se kravene, beslutte og teste. Svarene er empiri om, hvordan DDP fungerer på små, interne AI-projekter.
@@ -85,19 +86,33 @@ DDP er fra 1995 og deler grundidé med den senere Lean Startup-tilgang: byg små
 
 Siden spørger om dit navn. Det vises ved projekter, beslutninger og evalueringer, så kolleger kan se, hvem der har gjort hvad. Der er ingen adgangskode; navnet gemmes i browseren og på serveren.
 
-### Opret et projekt
+### Opret et projekt: planen i fire trin
 
-Nederst på forsiden udfylder du projektnavn, afdeling og det problem, værktøjet skal løse. Projektet åbner i trin 1.
+Knappen "Opret projekt" på forsiden åbner et guidet forløb. Det er planen i DDP-forstand, og intet gemmes, før du trykker "Opret projekt" på sidste trin. Lukker du forløbet undervejs, er kladden væk.
 
-### De fem trin i et projekt
+| Trin | Det gør du |
+|---|---|
+| 1 **Projekt** | Projektnavn (det eneste krævede felt), afdeling og det problem, værktøjet skal løse. |
+| 2 **Gevinst** | Skriv krævet nettogevinst, gevinstmargin, timepris, antal brugere og forventede omkostninger. Resultatet (timer pr. bruger pr. uge, råderum pr. år og tilbagebetalingstid) regnes med det samme. |
+| 3 **Antagelser** | "Lav antagelser ud fra tallene" laver de første antagelser direkte fra regnestykket. Hver antagelse har tekst, kategori (Gevinst, Brug og adoption, Omkostning, Teknisk, Organisatorisk), betydning og usikkerhed (Lav, Mellem, Høj) og forventet værdi. Prioriteringsmatrixen og "Test i denne rækkefølge" viser, hvad der bør testes først. |
+| 4 **Milepæle** | Brug de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot i afdelingen), eller lav egne. Hver milepæl har navn, dato, budget, beskrivelse og de antagelser, den tester. |
 
-| Trin | Fane | Det gør du |
-|---|---|---|
-| 1 | **Gevinstregnskab** | Skriv krævet nettogevinst, gevinstmargin, timepris, antal brugere og forventede omkostninger. Værktøjet viser med det samme, hvor mange timer hver bruger skal spare om ugen, råderummet pr. år og hvornår udviklingen er tjent hjem. Knappen "Lav antagelser ud fra tallene" opretter de første antagelser automatisk. |
-| 2 | **Antagelser** | Skriv de forudsætninger, projektet hviler på. Hver antagelse har en kategori (Gevinst, Brug og adoption, Omkostning, Teknisk, Organisatorisk), betydning og usikkerhed (Lav, Mellem, Høj), forventet og faktisk værdi, og en status: Ikke testet, Holder, Holder delvist eller Holder ikke. |
-| 3 | **Milepæle og beslutninger** | Opret milepæle, eller brug de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot i afdelingen). Vælg hvilke antagelser milepælen tester, skriv resultatet, og træf beslutningen: Fortsæt, Justér eller Stop, med begrundelse. |
-| 4 | **Sådan er det bygget** | Beskriv kort hvad værktøjet gør, tech stack som tags, dele andre kan genbruge, links, læringer og kontaktperson. Markér værktøjet som "i drift", når det bruges. Alle felter er frivillige. |
-| 5 | **Evaluering** | Fire spørgsmål på en skala fra 1 til 5 om, hvorvidt metoden hjalp, plus et fritekstfelt. Hver bruger svarer for sig selv, og fanen viser gennemsnittet. |
+### Projektsiden: opfølgning undervejs
+
+Når du vender tilbage til et projekt, ser du én side med sektioner i rækkefølge:
+
+| Sektion | Det gør du |
+|---|---|
+| **Hoved** | Navn, afdeling, status, hvem der oprettede projektet, og næste milepæl. Noter på projektet som helhed. |
+| **Planen** | Problembeskrivelsen og regnestykkets tal som opsummering. Knappen "Ret planen" åbner det samme forløb som ved oprettelsen, med projektets tal fyldt ind, og "Gem planen" skriver kun plandelen: status, resultater, beslutninger og noter rører den ikke. Antagelser, der er testet, og milepæle, der er besluttet, kan ikke fjernes. |
+| **Antagelser** | Sæt status (Ikke testet, Holder, Holder delvist, Holder ikke) og faktisk værdi på hver antagelse. Matrixen viser med ✓, ½ og ✕, hvad der er testet. Noter på hver antagelse. |
+| **Milepæle og beslutninger** | Den næste milepæl er åben og markeret "Næste". I hver milepæl tester du de antagelser, den er knyttet til, skriver resultatet og træffer beslutningen: Fortsæt, Justér eller Stop, med begrundelse. Noter på hver milepæl. |
+| **Sådan er det bygget** | Beskriv kort hvad værktøjet gør, tech stack som tags, dele andre kan genbruge, links, læringer og kontaktperson. Markér værktøjet som "i drift", når det bruges. Alle felter er frivillige. |
+| **Evaluering** | Fire spørgsmål på en skala fra 1 til 5 om, hvorvidt metoden hjalp, plus et fritekstfelt. Hver bruger svarer for sig selv, og sektionen viser gennemsnittet. Tænkt til, når mindst én beslutning er truffet. |
+
+### Noter
+
+Projektet, hver antagelse og hver milepæl har en foldbar blok "Noter (n)". Skriv en note, og tryk Enter eller "Tilføj note" (Shift+Enter giver linjeskift). Noten gemmes med navn og tidspunkt, så kolleger kan se, hvem der skrev hvad. Noter kan slettes.
 
 ### Gevinstregnskabet
 
@@ -209,7 +224,10 @@ Id'er må kun indeholde bogstaver, tal, `-` og `_`. Se også http://localhost:80
 - `CATS`, `STATUS`, `DEC`, `REV_DEFAULT`, `FQ`: kategorier, statusser, beslutninger, standardtal og evalueringsspørgsmål.
 - `calc()`: det omvendte gevinstregnskab (krævet gevinst → tilladte omkostninger → krævede sparede timer).
 - `status()`: projektets status. "I drift" vises, når værktøjet er markeret i drift, og den seneste beslutning er "Fortsæt".
-- `tabRev`, `tabAss`, `tabMs`, `tabBuild`, `tabEval`: de fem trin i et projekt.
+- `renderWizard()`: forløbet "Opret projekt"/"Ret planen" i fire trin. Arbejder på `view.wiz.draft`; `applyPatch()` og `onField` skriver til kladden i stedet for databasen, mens forløbet er åbent. `planPatch()` laver patchen ved "Gem planen" (kun plandelen).
+- `revFields` / `revOut`, `assPlanList` / `assPrioPanel`, `msPlanList`: plandelens felter, brugt af forløbet.
+- `renderProject()`: projektsiden med `planBox`, `secAss`, `secMs`, `secBuild`, `secEval`. Gamle fane-adresser (`#p-<id>-bygget` osv.) ruller til sektionen via `view.scrollTo`.
+- `renderNotes()`, `addNote()`, `deleteNote()`: noter på projekt, antagelser og milepæle.
 - `renderCatalog()` / `catalogItems()`: værktøjskataloget og dets filtre.
 - `setMode()` / `applyMode()`: skift mellem demo og live. `inMemory()` afgør, om ændringer kun gemmes i hukommelsen.
 - `queuePatch()` / `flush()`: gemmer ændringer (samlet og én ad gangen pr. projekt).
@@ -222,10 +240,11 @@ Id'er må kun indeholde bogstaver, tal, `-` og `_`. Se også http://localhost:80
 
 ```
 { name, department, description, createdBy, createdAt, updatedAt,
+  notes:      { <id>: { text, by, at, order, deleted? } },
   rev:        { targetNet, marginPct, rate, users, weeks, devHours, oneTime, maintHours, runMonthly, lifetime? (gammelt felt, læses ikke) },
-  assumptions:{ <id>: { text, cat, impact, uncertainty, status, expected, actual, order, deleted? } },
+  assumptions:{ <id>: { text, cat, impact, uncertainty, status, expected, actual, order, deleted?, notes? } },
   milestones: { <id>: { name, desc, date, budget, tests:{<antagelses-id>:bool}, result,
-                        decision, rationale, decidedBy, decidedAt, order, deleted? } },
+                        decision, rationale, decidedBy, decidedAt, order, deleted?, notes? } },
   feedback:   { <bruger-id>: { q1, q2, q3, q4, comment, at } },
   build:      { summary, stack:[tag], reusable, links, learnings, contact, live } }
 ```

@@ -218,3 +218,11 @@ details *{box-sizing:border-box}
 .note-text{white-space:pre-wrap}
 .note-form{display:flex;gap:6px;align-items:flex-start;margin-top:10px}
 .note-form textarea{flex:1;min-height:0}
+
+/* projektsiden: sektioner, planboks og næste milepæl */
+.sec{margin-top:28px;padding-top:18px;border-top:1px solid var(--line)}
+.sec>h2{margin:0 0 10px}
+.planbox .ledger{max-width:520px}
+.plan-desc{max-width:72ch}
+.a-text{margin:0 0 6px;font-weight:500}
+.ms.next>.ms-head{border-color:var(--info)}

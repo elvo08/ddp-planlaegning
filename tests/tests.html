@@ -108,7 +108,7 @@ test("addTag afviser dublet med andre bogstaver", async () => {
   eq(DDP.state().projects[id].build.stack.filter(t=>t.toLowerCase()==="python").length, 1);
   DDP.removeTag(id, "Python"); ok(!DDP.state().projects[id].build.stack.includes("Python"));
 });
-test("fanen bygget vises med felterne", () => {
+test("sektionen bygget vises med felterne", () => {
   DDP.setMode("demo"); const id = Object.keys(DDP.state().projects)[0];
   DDP.readHashFrom("#demo-p-"+id+"-bygget"); DDP.render();
   const t = document.getElementById("app").textContent;
@@ -170,11 +170,11 @@ test("I2: filtre nulstilles ved skift af visning", () => {
   eq(DDP.state().view.filter, {dep:"", tech:"", q:""});
   eq(DDP.state().view.home, "projekter");
 });
-test("I3: læseadgang kan skifte fane i et projekt", () => {
+test("I3: læseadgang viser projektsiden uden Ret planen", () => {
   DDP.setMode("live");
   window.__snap({docs:[fakeDoc("l3",{name:"Læs", rev:{}, assumptions:{}, milestones:{}, feedback:{}})], size:1, metadata:{fromCache:false}});
   DDP.setCanWrite(false); DDP.readHashFrom("#p-l3-bygget"); DDP.render();
-  ok(!document.querySelector('[data-act="tab"]').matches(":disabled"), "fanen er ikke deaktiveret");
+  ok(document.getElementById("sec-bygget"), "sektionen findes"); ok(!appEl().querySelector('[data-act="edit-plan"]'), "Ret planen er skjult");
   DDP.setCanWrite(true); DDP.readHashFrom(""); DDP.render();
 });
 test("I4: evalueringen i demo lover ikke at gemme", () => {
@@ -242,8 +242,10 @@ const appEl = () => document.getElementById("app");
 const openDemo = h => { DDP.setMode("demo"); DDP.readHashFrom(h); DDP.render(); };
 const unnamed = () => [...appEl().querySelectorAll("input:not([type=hidden]),select,textarea")]
   .filter(el => !(el.labels && el.labels.length) && !el.getAttribute("aria-label")).length;
-test("design: alle felter på Antagelser har et navn", () => { openDemo("#demo-p-demo-retur-antagelser"); eq(unnamed(), 0); });
-test("design: alle felter på Milepæle har et navn", () => { openDemo("#demo-p-demo-retur-milepaele"); eq(unnamed(), 0); });
+test("design: alle felter på projektsiden har et navn", () => { openDemo("#demo-p-demo-retur"); eq(unnamed(), 0); });
+test("design: alle felter i forløbets trin 3 og 4 har et navn", () => {
+  openDemo("#demo-p-demo-retur-plan"); act("wiz-next"); act("wiz-next"); eq(unnamed(), 0, "trin 3"); act("wiz-next"); eq(unnamed(), 0, "trin 4"); DDP.setMode("live");
+});
 test("design: Antagelser bruger ingen fast kolonnebredde inline", () => {
   openDemo("#demo-p-demo-retur-antagelser");
   ok(![...appEl().querySelectorAll(".two")].some(d => d.style.gridTemplateColumns), "ingen inline grid-template-columns");
@@ -256,11 +258,11 @@ test("design: matrix-chip viser status med tekst, ikke kun farve", () => {
   ok(appEl().textContent.includes("✓ Holder"), "forklaring under matrixen");
 });
 test("design: sletning af antagelse kræver bekræftelse", () => {
-  openDemo("#demo-p-demo-retur-antagelser");
+  openDemo("#demo-nyt"); setField("p.name", "Slettest"); act("wiz-next"); act("wiz-next"); act("suggest-ass");
   const before = appEl().querySelectorAll(".a-row").length, real = window.confirm;
   window.confirm = () => false;
   try { appEl().querySelector('[data-act="del-ass"]').click(); } finally { window.confirm = real; }
-  eq(appEl().querySelectorAll(".a-row").length, before);
+  eq(appEl().querySelectorAll(".a-row").length, before); DDP.setMode("live");
 });
 test("design: Opret projekt står før projektlisten", () => {
   openDemo("#demo"); const h = appEl().innerHTML;
@@ -268,8 +270,8 @@ test("design: Opret projekt står før projektlisten", () => {
 });
 test("design: projekthovedet har kun titel, status og afdeling", () => {
   openDemo("#demo-p-demo-lager-antagelser");
-  const steps = appEl().querySelector(".steps"), before = [];
-  for (let n = steps.previousElementSibling; n; n = n.previousElementSibling) before.push(n.outerHTML);
+  const plan = document.getElementById("sec-plan"), before = [];
+  for (let n = plan.previousElementSibling; n; n = n.previousElementSibling) before.push(n.outerHTML);
   const head = before.join("");
   ok(!head.includes('data-k="p.description"'), "beskrivelsen er ikke i hovedet");
   ok(!head.includes('data-act="del-project"'), "Slet projekt er ikke i hovedet");
@@ -281,9 +283,8 @@ test("design: besluttede milepæle er foldet sammen, åbne er foldet ud", () => 
   eq(d.length, 3); eq(d.map(x => x.open), [false, false, true]);
 });
 test("design: samme navn for 'lav antagelser' begge steder", () => {
-  openDemo("#demo-p-demo-lager-gevinst");
-  const a = appEl().querySelector('[data-act="suggest-ass"]').textContent.trim();
-  openDemo("#demo-nyt"); setField("p.name", "Navnetest"); act("wiz-next"); act("wiz-next");
+  openDemo("#demo-nyt"); setField("p.name", "Navnetest"); act("wiz-next");
+  const a = appEl().querySelector('[data-act="suggest-ass"]').textContent.trim(); act("wiz-next");
   eq(appEl().querySelector('[data-act="suggest-ass"]').textContent.trim(), a); DDP.setMode("live");
 });
 test("design: fejlbeskeder bliver stående, til de lukkes", async () => {
@@ -293,10 +294,11 @@ test("design: fejlbeskeder bliver stående, til de lukkes", async () => {
   ok(t.classList.contains("show"), "stadig synlig"); ok(t.querySelector('[data-act="close-toast"]'), "har Luk-knap");
   t.querySelector('[data-act="close-toast"]').click(); ok(!t.classList.contains("show"));
 });
-test("design: fanetitel og fokus følger visningen", () => {
-  openDemo("#demo-p-demo-lager-antagelser");
-  appEl().querySelector('[data-act="tab"][data-tab="milepaele"]').click();
-  ok(document.title.startsWith("Milepæle og beslutninger · ") && document.title.endsWith(" · DDP-planlægning"), document.title);
+test("design: sidetitel og fokus følger visningen", () => {
+  openDemo("#demo-p-demo-lager"); const nm = DDP.state().projects["demo-lager"].name;
+  eq(document.title, nm + " · DDP-planlægning");
+  act("edit-plan");
+  eq(document.title, "Ret planen · " + nm + " · DDP-planlægning");
   eq(document.activeElement && document.activeElement.id, "view-title");
   DDP.setMode("live");
 });
@@ -347,7 +349,7 @@ test("farver: kun én fyldt knap på forsiden", () => {
 test("talfelt: markøren bliver sidst i feltet efter gen-rendering", () => {
   DDP.setMode("live");
   window.__snap({docs:[fakeDoc("tal",{name:"Tal", rev:{}, assumptions:{}, milestones:{}, feedback:{}})], size:1, metadata:{fromCache:false}});
-  DDP.readHashFrom("#p-tal-gevinst"); DDP.render();
+  DDP.readHashFrom("#p-tal-plan"); DDP.render(); act("wiz-next");
   const f = () => document.querySelector('[data-k="rev.rate"]');
   f().focus(); f().select();
   document.execCommand("insertText", false, "5");
@@ -486,6 +488,67 @@ test("forløb: annullér og visningsskift skriver intet", async () => {
 });
 test("forløb: læseadgang i live viser ikke Opret projekt", () => {
   DDP.setCanWrite(false); DDP.readHashFrom(""); DDP.render(); ok(!appEl().querySelector('[data-act="new-project"]')); DDP.setCanWrite(true);
+});
+
+/* Projektsiden som opfølgning */
+test("projektside: ingen faner, ingen plantal-felter, Ret planen findes", () => {
+  openDemo("#demo-p-demo-retur"); ok(!appEl().querySelector('[data-act="tab"]'));
+  ok(!appEl().querySelector('[data-k^="rev."]')); ok(appEl().querySelector('[data-act="edit-plan"]'));
+  ["sec-plan","sec-antagelser","sec-milepaele","sec-bygget","sec-evaluering"].forEach(id => ok(document.getElementById(id), id));
+  ok(appEl().querySelector("#sec-plan").textContent.includes(DDP_DEMO.projects["demo-retur"].description.slice(0,30)), "beskrivelsen i planboksen");
+  ok(!appEl().querySelector('[data-act="add-ass"]') && !appEl().querySelector('[data-act="add-ms"]') && !appEl().querySelector('[data-act="del-ass"]'));
+  ok(appEl().querySelector('[data-k^="a."][data-k$=".status"]'), "status kan sættes"); ok(appEl().querySelector(".gatebox"), "beslutningspunkt findes");
+});
+test("projektside: næste milepæl er åben og markeret, besluttede foldet sammen", () => {
+  openDemo("#demo-p-demo-retur"); const d = [...appEl().querySelectorAll("details.ms")];
+  eq(d.map(x => x.open), [false, false, true]); ok(d[2].classList.contains("next")); ok(d[2].querySelector("summary").textContent.includes("Næste"));
+});
+test("projektside: gamle fane-adresser ruller til sektionen", () => {
+  DDP.setMode("demo"); DDP.readHashFrom("#demo-p-demo-retur-bygget"); eq(DDP.state().view.scrollTo, "bygget"); DDP.render();
+  eq(DDP.state().view.scrollTo, null); eq(location.hash, "#demo-p-demo-retur");
+  DDP.readHashFrom("#demo-p-demo-retur-gevinst"); eq(DDP.state().view.scrollTo, "plan");
+});
+test("projektside: hovedet viser næste milepæl, og evalueringen har hjælpetekst", () => {
+  openDemo("#demo-p-demo-retur"); ok(appEl().textContent.includes("Næste milepæl:")); ok(appEl().textContent.includes("mindst én beslutning"));
+});
+test("ret planen: åbner forløbet med projektets tal, låste elementer uden slet-knap", () => {
+  openDemo("#demo-p-demo-retur"); act("edit-plan");
+  eq(DDP.state().view.wiz.mode, "edit"); eq(location.hash, "#demo-p-demo-retur-plan"); ok(document.title.startsWith("Ret planen"));
+  eq(appEl().querySelector('[data-k="p.name"]').value, DDP_DEMO.projects["demo-retur"].name);
+  act("wiz-next"); eq(appEl().querySelector('[data-k="rev.rate"]').value, String(DDP_DEMO.projects["demo-retur"].rev.rate));
+  act("wiz-next"); const tested = Object.entries(DDP_DEMO.projects["demo-retur"].assumptions).filter(([,a]) => a.status && a.status !== "ikke").length;
+  eq(appEl().querySelectorAll('[data-act="del-ass"]').length, Object.keys(DDP_DEMO.projects["demo-retur"].assumptions).length - tested);
+  ok(appEl().textContent.includes("kan ikke fjernes"));
+  act("wiz-next"); const decided = Object.values(DDP_DEMO.projects["demo-retur"].milestones).filter(m => m.decision).length;
+  eq(appEl().querySelectorAll('[data-act="del-ms"]').length, Object.keys(DDP_DEMO.projects["demo-retur"].milestones).length - decided);
+  act("wiz-cancel"); eq(DDP.state().view.wiz, null); eq(DDP.state().view.pid, "demo-retur"); DDP.setMode("live");
+});
+test("ret planen: patch indeholder kun plandelen", () => {
+  const orig = {name:"A", rev:{rate:400}, assumptions:{a1:{text:"x", cat:"gevinst", impact:3, uncertainty:2, expected:"1", status:"holder", actual:"2", order:1, notes:{n:{text:"hej"}}}, a2:{text:"y", order:2}},
+                milestones:{m1:{name:"M", desc:"d", date:"", budget:"", tests:{a1:true}, result:"r", decision:"fortsaet", order:1}}};
+  const draft = {name:"A2", department:"", description:"", rev:{rate:450}, assumptions:{a1:{text:"x2", cat:"gevinst", impact:3, uncertainty:2, expected:"1", order:1}, a3:{text:"ny", cat:"brug", impact:2, uncertainty:2, expected:"", order:3}},
+                 milestones:{m1:{name:"M", desc:"d", date:"", budget:"", tests:{a1:true}, order:1}}};
+  const p = DDP.planPatch(draft, orig);
+  eq(p.name, "A2"); eq(p.rev.rate, 450); eq(p.assumptions.a1, {text:"x2", cat:"gevinst", impact:3, uncertainty:2, expected:"1", order:1});
+  eq(p.assumptions.a2, {deleted:true}); eq(p.assumptions.a3.text, "ny");
+  eq(Object.keys(p.milestones.m1).sort(), ["budget","date","desc","name","order","tests"]);
+  ["status","actual","notes"].forEach(k => ok(!(k in p.assumptions.a1), k)); ["result","decision"].forEach(k => ok(!(k in p.milestones.m1), k));
+  ok(!("build" in p) && !("feedback" in p) && !("notes" in p));
+});
+test("ret planen: gem skriver ét update og bevarer status", async () => {
+  DDP.setMode("live"); window.__snap({docs:[fakeDoc("e1",{name:"E", rev:{rate:400}, assumptions:{a1:{text:"x", status:"holder", actual:"2", order:1}}, milestones:{}})], size:1, metadata:{fromCache:false}});
+  DDP.readHashFrom("#p-e1-plan"); DDP.render(); act("wiz-next"); setField("rev.rate", "450"); act("wiz-next"); act("wiz-next");
+  window.__writes.length = 0; act("wiz-finish"); await tick(); await tick();
+  eq(window.__writes.length, 1); eq(window.__writes[0].op, "update"); eq(window.__writes[0].p.rev.rate, 450); ok(!("status" in window.__writes[0].p.assumptions.a1));
+  eq(DDP.state().projects.e1.assumptions.a1.status, "holder"); eq(DDP.state().view.wiz, null); eq(location.hash, "#p-e1");
+});
+test("ret planen: fjernet antagelse forsvinder fra milepælens testliste", () => {
+  DDP.setMode("live"); window.__snap({docs:[fakeDoc("e2",{name:"E2", assumptions:{a1:{text:"x", order:1}, a2:{text:"y", order:2}}, milestones:{m1:{name:"M", tests:{a1:true, a2:true}, order:1}}})], size:1, metadata:{fromCache:false}});
+  DDP.readHashFrom("#p-e2-plan"); DDP.render(); act("wiz-next"); act("wiz-next");
+  const real = window.confirm; window.confirm = () => true; try { appEl().querySelector('[data-act="del-ass"][data-id="a1"]').click(); } finally { window.confirm = real; }
+  act("wiz-next"); act("wiz-finish");
+  DDP.readHashFrom("#p-e2"); DDP.render();
+  const gates = [...appEl().querySelectorAll(".gate-a")]; eq(gates.length, 1); ok(gates[0].textContent.includes("y"), "kun den tilbageværende antagelse vises");
 });
 
 runAll();

@@ -16,7 +16,8 @@ const LVL={1:"Lav",2:"Mellem",3:"Høj"};
 const STATUS={ikke:"Ikke testet",holder:"Holder",delvist:"Holder delvist",holder_ikke:"Holder ikke"};
 const DEC={fortsaet:"Fortsæt",juster:"Justér",stop:"Stop"};
 const MARK={holder:"✓",delvist:"½",holder_ikke:"✕"};
-const TABS=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
+/* sektioner på projektsiden; de gamle fane-adresser (#p-<id>-<sektion>) ruller hertil */
+const SECTIONS=["plan","antagelser","milepaele","bygget","evaluering"];
 const SUGGEST_LABEL="Lav antagelser ud fra tallene";
 const REV_DEFAULT={targetNet:100000,marginPct:50,rate:400,users:5,weeks:46,devHours:40,oneTime:0,maintHours:4,runMonthly:200};
 const FQ=[
@@ -38,7 +39,7 @@ const names=Object.assign({},DEMO.people);
 /* filtre på projektoversigten; gemmes ikke, nulstilles ved skift mellem demo og live */
 function emptyPfilter(){return {q:"",dep:"",status:[],sort:"updated"}}
 /* wiz: forløbet "Opret projekt"/"Ret planen" ({mode:"new"|"edit", pid, step 1-4, draft, orig}) eller null */
-const view={pid:null,tab:"gevinst",home:"projekter",filter:{dep:"",tech:"",q:""},pfilter:emptyPfilter(),msOpen:{},wiz:null};
+const view={pid:null,home:"projekter",filter:{dep:"",tech:"",q:""},pfilter:emptyPfilter(),msOpen:{},wiz:null,scrollTo:null};
 
 /* ---------- writes: optimistic, coalesced, one at a time per doc ---------- */
 const pend={},timers={},chains={};
@@ -198,6 +199,7 @@ function render(){
   renderMode();
   if(!loaded&&!inMemory()){app.innerHTML=`<p class="muted">Indlæser projekter …</p>${staleNote?`<div class="banner info">${esc(staleNote)}</div>`:""}`;return}
   if(view.pid&&!projects[view.pid]){view.pid=null}
+  if(view.wiz&&view.wiz.mode==="edit"&&!projects[view.wiz.pid]){view.wiz=null}
   const live=mode==="live";
   app.innerHTML=(mode==="demo"?`<div class="banner demo">Du ser demodata. Ændringer gemmes ikke.</div>`:"")
     +(live&&needName()?`<div class="banner name"><label for="my-name">Hvad hedder du? Dit navn vises ved projekter, beslutninger og evalueringer.</label>
@@ -208,7 +210,7 @@ function render(){
     +(view.wiz?fieldset(renderWizard()):view.pid?renderProject():renderOverview());
   const wizTitle=view.wiz?(view.wiz.mode==="new"?"Opret projekt":`Ret planen · ${(P()||{}).name||"Uden navn"}`):"";
   $("#crumb").textContent=view.wiz?wizTitle:view.pid?(P().name||"Uden navn"):"";
-  document.title=(view.wiz?`${wizTitle} · `:view.pid?`${tabLabel(view.tab)} · ${P().name||"Uden navn"} · `:view.home==="katalog"?"Værktøjskatalog · ":"")+"DDP-planlægning";
+  document.title=(view.wiz?`${wizTitle} · `:view.pid?`${P().name||"Uden navn"} · `:view.home==="katalog"?"Værktøjskatalog · ":"")+"DDP-planlægning";
   if(key){
     const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});
@@ -217,6 +219,8 @@ function render(){
       else if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
+  /* en gammel fane-adresse ruller til sektionen én gang */
+  if(view.scrollTo){const s=document.getElementById("sec-"+view.scrollTo);view.scrollTo=null;if(s)s.scrollIntoView({block:"start"})}
 }
 
 const needName=()=>!localMode&&!!userCap&&typeof userCap.setName==="function"&&(!myName||askName);
@@ -233,7 +237,6 @@ async function saveName(){
   renderWho();render();toast("Navnet er gemt.");
 }
 
-const tabLabel=k=>(TABS.find(t=>t[0]===k)||TABS[0])[1];
 /* efter skift af side eller fane: fokus på overskriften, så tastatur og skærmlæser starter det rigtige sted */
 function afterRoute(){const h=$("#view-title");if(h)h.focus({preventScroll:true})}
 
@@ -345,23 +348,90 @@ function renderOverview(){
     ${list.length?`<details class="exports"><summary>Eksportér data</summary><div class="row-actions"><button class="btn" data-act="export-json" type="button">Alle data (JSON)</button><button class="btn" data-act="export-csv" type="button">Beslutningslog (CSV)</button></div></details>`:""}`}`;
 }
 
+/* projektsiden: opfølgning på én side. Planen vises som opsummering og rettes via "Ret planen" */
 function renderProject(){
   const p=P();
-  const [st,cls]=status(p);
-  const tabs=TABS;
-  const body={gevinst:tabRev,antagelser:tabAss,milepaele:tabMs,bygget:tabBuild,evaluering:tabEval}[view.tab]||tabRev;
-  return fieldset(`<div class="row-actions" style="justify-content:space-between;align-items:flex-start">
+  const [st,cls]=status(p),next=nextMs(p);
+  return fieldset(`<h1 id="view-title" class="sr-only" tabindex="-1">${esc(p.name||"Uden navn")}</h1>
+    <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:260px">
         <input type="text" data-k="p.name" value="${esc(p.name)}" aria-label="Projektnavn" style="font-size:26px;font-weight:700;border-color:transparent;padding:4px 6px;margin-left:-7px;background:transparent;letter-spacing:-.02em">
         <div class="row-actions small muted" style="margin-top:4px"><span class="pill ${cls}">${st}</span>
           <input type="text" data-k="p.department" value="${esc(p.department)}" placeholder="Afdeling" aria-label="Afdeling" style="width:180px;min-height:30px;padding:3px 8px">
           ${p.createdBy?`<span>Oprettet af ${esc(nameOf(p.createdBy))} ${fmtTs(p.createdAt)}</span>`:""}</div>
+        <div class="small muted" style="margin-top:6px">Næste milepæl: ${next?`<b>${esc(next.name||"Milepæl")}</b> · ${fmtDate(next.date)}`:"ingen åben milepæl"}</div>
       </div>
     </div>
-    `)+`<nav class="steps" role="tablist">${tabs.map(([k,l],i)=>`<button class="step" role="tab" type="button" aria-selected="${view.tab===k}" data-act="tab" data-tab="${k}"><b>${i+1}</b>${l}</button>`).join("")}</nav>
-    `+fieldset(`<h2 id="view-title" class="sr-only" tabindex="-1">${tabLabel(view.tab)}</h2>`+body(p)
-      +`<div class="danger-zone"><button class="btn ghost danger" data-act="del-project" type="button">Slet projekt</button></div>`);
+    ${renderNotes("p",view.pid,p.notes,{open:true})}
+    ${planBox(p)}${secAss(p)}${secMs(p)}${secBuild(p)}${secEval(p)}
+    <div class="danger-zone"><button class="btn ghost danger" data-act="del-project" type="button">Slet projekt</button></div>`);
 }
+function planBox(p){
+  const c=calc(rev(p));
+  return `<section class="sec planbox" id="sec-plan"><h2>Planen</h2>
+    ${p.description?`<p class="plan-desc">${esc(p.description)}</p>`:`<p class="muted">Ingen problembeskrivelse endnu.</p>`}
+    <p class="statement">Hver bruger skal spare <strong>${nf1.format(c.perUserWeek)} timer om ugen</strong>, for at projektet er umagen værd.</p>
+    <table class="ledger">
+      <tr><td>Krævet nettogevinst pr. år</td><td>${kr(c.targetNet)}</td></tr>
+      <tr><td>Tilladte omkostninger pr. år</td><td>${kr(c.allow)}</td></tr>
+      <tr><td>Løbende omkostninger pr. år</td><td>${kr(c.running)}</td></tr>
+      <tr class="sum"><td>Råderum pr. år</td><td>${kr(c.slack)}</td></tr>
+      <tr><td>Engangsudgift</td><td>${kr(c.build)}</td></tr>
+      <tr><td>Tilbagebetalingstid</td><td>${fmtPayback(c.paybackMonths)}</td></tr>
+    </table>
+    <div class="verdict ${c.slack>0?"ok":"bad"}">${revVerdict(c)}</div>
+    ${canEdit()?`<div style="margin-top:12px"><button class="btn" type="button" data-act="edit-plan">Ret planen</button></div>`:""}
+  </section>`;
+}
+function secAss(p){
+  const as=listOf(p.assumptions),num=aNum(p),tested=as.filter(a=>a.status&&a.status!=="ikke").length;
+  const rows=as.map(a=>`<div class="a-row" id="a-${a.id}">
+      <div class="a-num">${num[a.id]}</div>
+      <div>
+        <p class="a-text">${esc(a.text||"Uden tekst")}</p>
+        <div class="tags"><span class="tag plain">${CATS[a.cat]||esc(a.cat||"")}</span><span class="tag plain">Betydning: ${LVL[a.impact||2]}</span><span class="tag plain">Usikkerhed: ${LVL[a.uncertainty||2]}</span>${a.expected?`<span class="tag plain">Forventet: ${esc(a.expected)}</span>`:""}</div>
+        <div class="a-fields">
+          <div><label class="f" for="a-${a.id}-status">Status</label><select id="a-${a.id}-status" data-k="a.${a.id}.status">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="a-${a.id}-actual">Faktisk værdi</label><input type="text" id="a-${a.id}-actual" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Målt resultat"></div>
+        </div>
+        ${renderNotes("a",a.id,a.notes,{open:listOf(a.notes).length>0})}
+      </div>
+    </div>`).join("");
+  return `<section class="sec" id="sec-antagelser"><h2>Antagelser <span class="muted small">· ${tested} af ${as.length} testet</span></h2>
+    ${as.length?`<div class="two ass"><div>${rows}<div style="border-top:1px solid var(--line)"></div></div><div class="stack">${assPrioPanel(p,{withStatus:true})}</div></div>`:`<p class="empty">Ingen antagelser endnu. Tilføj dem under "Ret planen".</p>`}
+  </section>`;
+}
+function secMs(p){
+  const ms=msSorted(p),as=listOf(p.assumptions),num=aNum(p),next=nextMs(p);
+  const path=ms.length?`<div class="panel" style="margin-bottom:8px"><div class="path"><div class="path-inner">${ms.map((m,i)=>`<button class="node" type="button" data-act="goto-ms" data-id="${m.id}"><div class="gate ${m.decision||""}"><span>${i+1}</span></div><div class="nm">${esc(m.name||"Milepæl")}</div><div class="dt">${m.decision?DEC[m.decision]:fmtDate(m.date)}</div></button>`).join("")}</div></div></div>`:"";
+  const cards=ms.map((m,i)=>{
+    const tests=as.filter(a=>m.tests&&m.tests[a.id]);
+    const isNext=!!next&&m.id===next.id;
+    const open=m.id in view.msOpen?view.msOpen[m.id]:isNext;
+    return `<details class="ms${isNext?" next":""}" id="ms-${m.id}" data-ms="${m.id}" ${open?"open":""}>
+      <summary class="ms-head"><span class="num">Milepæl ${i+1}</span><span class="ms-name">${esc(m.name||"Uden navn")}</span>${m.decision?`<span class="pill ${m.decision==="fortsaet"?"ok":m.decision==="juster"?"warn":"bad"}">${DEC[m.decision]}</span>`:isNext?`<span class="pill info">Næste</span>`:`<span class="pill">Afventer</span>`}</summary>
+      <p class="small muted" style="margin:0 0 6px">${fmtDate(m.date)}${m.budget!==""&&m.budget!=null?` · budget ${nf.format(m.budget)} timer`:""}</p>
+      ${m.desc?`<p style="margin:0 0 10px">${esc(m.desc)}</p>`:""}
+      <div class="gatebox">
+        <h3>Beslutningspunkt</h3>
+        <p class="small muted">Sammenlign resultatet med antagelserne, og beslut hvad der sker nu.</p>
+        ${tests.length?`<div style="margin:6px 0 12px">${tests.map(a=>`<div class="gate-a"><span><b>${num[a.id]}</b> ${esc(a.text)}${a.expected?` <span class="muted">(forventet: ${esc(a.expected)})</span>`:""}</span>
+          <input type="text" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Faktisk værdi" aria-label="Faktisk værdi for ${num[a.id]}">
+          <select data-k="a.${a.id}.status" aria-label="Status for ${num[a.id]}">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>`).join("")}</div>`:`<p class="small muted">Milepælen tester ingen antagelser. Vælg dem under "Ret planen".</p>`}
+        <label class="f" for="m-${m.id}-result">Resultat og læring</label><textarea id="m-${m.id}-result" data-k="m.${m.id}.result" rows="2" placeholder="Hvad viste testen?">${esc(m.result)}</textarea>
+        <div class="choice" role="group" aria-label="Beslutning">${Object.entries(DEC).map(([k,l])=>`<button type="button" class="${k}" aria-pressed="${m.decision===k}" data-act="decide" data-id="${m.id}" data-dec="${k}">${l}</button>`).join("")}</div>
+        <label class="f" for="m-${m.id}-why">Begrundelse</label><textarea id="m-${m.id}-why" data-k="m.${m.id}.rationale" rows="2" placeholder="Hvorfor denne beslutning?">${esc(m.rationale)}</textarea>
+        ${m.decision?`<p class="small muted" style="margin:8px 0 0">Besluttet af ${esc(nameOf(m.decidedBy))} ${fmtTs(m.decidedAt)}. <button class="btn ghost small" type="button" data-act="undecide" data-id="${m.id}" style="padding:2px 6px">Fortryd beslutning</button></p>`:""}
+      </div>
+      ${renderNotes("m",m.id,m.notes,{open:listOf(m.notes).length>0})}
+    </details>`}).join("");
+  return `<section class="sec" id="sec-milepaele"><h2>Milepæle og beslutninger</h2>
+    ${path}
+    ${ms.length?cards:`<p class="empty">Ingen milepæle endnu. Tilføj dem under "Ret planen".</p>`}
+  </section>`;
+}
+const secBuild=p=>`<section class="sec" id="sec-bygget"><h2>Sådan er det bygget</h2>${tabBuild(p)}</section>`;
+const secEval=p=>`<section class="sec" id="sec-evaluering"><h2>Evaluering</h2><p class="small muted">Evalueringen er tænkt til, når I har truffet mindst én beslutning ved en milepæl.</p>${tabEval(p)}</section>`;
 
 function numField(k,label,val,unit){
   return `<div><label class="f" for="f-${k}">${label}</label><div style="display:flex;align-items:center;gap:6px"><input type="number" id="f-${k}" min="0" step="any" data-k="rev.${k}" data-num="1" data-r="rev" value="${esc(val)}"><span class="small muted" style="white-space:nowrap">${unit}</span></div></div>`;
@@ -388,15 +458,6 @@ function revFields(r){
         </div>
       </div>
     </div>`;
-}
-function tabRev(p){
-  const r=rev(p);
-  return `<p class="lead">Start med, hvad projektet skal give, ikke med hvad det vil koste. Regn baglæns til, hvad der skal være sandt, og hvad projektet højst må koste. De tal bliver jeres første antagelser.</p>
-  <div style="margin-bottom:20px;max-width:760px"><label class="f" for="p-desc">Hvilket problem skal værktøjet løse?</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
-  <div class="two">
-    <div id="rev-out">${revOut(r)}</div>
-    ${revFields(r)}
-  </div>`;
 }
 /* teksten under søjlerne: tjent hjem efter … / aldrig */
 function revVerdict(c){
@@ -433,9 +494,9 @@ function revOut(r){
   </div>`;
 }
 
-/* én antagelse som redigérbar række; plan: kun plandelen (uden status/faktisk); locked: kan ikke slettes */
+/* én antagelse som redigérbar række i forløbet (plandelen); locked: testet, kan ikke slettes */
 function assRow(a,num,o){
-  const plan=o&&o.plan,locked=o&&o.locked;
+  const locked=o&&o.locked;
   const del=locked?`<span class="small muted">Testet, kan ikke fjernes</span>`:`<button class="btn ghost danger" type="button" data-act="del-ass" data-id="${a.id}" aria-label="Slet antagelse ${num[a.id]}">Slet</button>`;
   return `<div class="a-row" id="a-${a.id}">
       <div class="a-num">${num[a.id]}</div>
@@ -446,8 +507,6 @@ function assRow(a,num,o){
           <div><label class="f" for="a-${a.id}-impact">Betydning</label><select id="a-${a.id}-impact" data-k="a.${a.id}.impact" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.impact||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
           <div><label class="f" for="a-${a.id}-uncertainty">Usikkerhed</label><select id="a-${a.id}-uncertainty" data-k="a.${a.id}.uncertainty" data-num="1">${[3,2,1].map(v=>`<option value="${v}" ${(a.uncertainty||2)==v?"selected":""}>${LVL[v]}</option>`).join("")}</select></div>
           <div><label class="f" for="a-${a.id}-expected">Forventet værdi</label><input type="text" id="a-${a.id}-expected" data-k="a.${a.id}.expected" value="${esc(a.expected)}" placeholder="Fx 1,5 t/uge"></div>
-          ${plan?"":`<div><label class="f" for="a-${a.id}-status">Status</label><select id="a-${a.id}-status" data-k="a.${a.id}.status">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>
-          <div><label class="f" for="a-${a.id}-actual">Faktisk værdi</label><input type="text" id="a-${a.id}-actual" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Målt resultat"></div>`}
         </div>
       </div>
     </div>`;
@@ -458,7 +517,7 @@ const assEmpty=()=>`<p class="empty">Ingen antagelser endnu. Vælg "${SUGGEST_LA
 /* plandelen af antagelserne (forløbet): tekst, kategori, betydning, usikkerhed, forventet */
 function assPlanList(p,locked){
   const as=listOf(p.assumptions),num=aNum(p);
-  return assButtons()+(as.length?as.map(a=>assRow(a,num,{plan:true,locked:!!(locked&&locked("a",a.id))})).join("")+`<div style="border-top:1px solid var(--line)"></div>`:assEmpty());
+  return assButtons()+(as.length?as.map(a=>assRow(a,num,{locked:!!(locked&&locked("a",a.id))})).join("")+`<div style="border-top:1px solid var(--line)"></div>`:assEmpty());
 }
 /* prioriteringsmatrix; withStatus: chips viser ✓/½/✕ og forklaring; uden: listen "Test i denne rækkefølge" */
 function assPrioPanel(p,o){
@@ -478,14 +537,6 @@ function assPrioPanel(p,o){
   const legend=withStatus?`<p class="small muted legend">✓ Holder · ½ Holder delvist · ✕ Holder ikke · uden tegn: ikke testet</p>`:"";
   const order=!withStatus&&prio.length?`<div class="panel"><h3>Test i denne rækkefølge</h3><ol style="margin:8px 0 0;padding-left:20px;font-size:14px">${prio.slice(0,5).map(a=>`<li style="margin-bottom:6px"><b>${num[a.id]}</b> ${esc(a.text||"Uden tekst")}</li>`).join("")}</ol></div>`:"";
   return `<div class="panel"><h3>Prioritering</h3><p class="small muted">Felter mærket "Test først" har høj betydning og høj usikkerhed.</p>${matrix}${legend}</div>${order}`;
-}
-function tabAss(p){
-  const as=listOf(p.assumptions),num=aNum(p);
-  return `<p class="lead">Skriv alt det, der skal være sandt, for at projektet lykkes. Antagelser med høj betydning og høj usikkerhed skal testes først, fordi de kan vælte projektet.</p>
-  <div class="two ass">
-    <div>${assButtons()}${as.length?as.map(a=>assRow(a,num,{})).join("")+`<div style="border-top:1px solid var(--line)"></div>`:assEmpty()}</div>
-    <div class="stack">${assPrioPanel(p,{withStatus:true})}</div>
-  </div>`;
 }
 
 /* plandelen af én milepæl: navn, dato, budget, beskrivelse og hvilke antagelser den tester */
@@ -516,33 +567,6 @@ function msPlanList(p,locked){
     </div>`}).join("");
   return msButtons(ms.length)+(ms.length?cards:msEmpty());
 }
-function tabMs(p){
-  const ms=msSorted(p),as=listOf(p.assumptions),num=aNum(p);
-  const path=ms.length?`<div class="panel" style="margin-bottom:8px"><div class="path"><div class="path-inner">${ms.map((m,i)=>`<button class="node" type="button" data-act="goto-ms" data-id="${m.id}"><div class="gate ${m.decision||""}"><span>${i+1}</span></div><div class="nm">${esc(m.name||"Milepæl")}</div><div class="dt">${m.decision?DEC[m.decision]:fmtDate(m.date)}</div></button>`).join("")}</div></div></div>`:"";
-  const cards=ms.map((m,i)=>{
-    const tests=as.filter(a=>m.tests&&m.tests[a.id]);
-    const open=m.id in view.msOpen?view.msOpen[m.id]:!m.decision;
-    return `<details class="ms" id="ms-${m.id}" data-ms="${m.id}" ${open?"open":""}>
-      <summary class="ms-head"><span class="num">Milepæl ${i+1}</span><span class="ms-name">${esc(m.name||"Uden navn")}</span>${m.decision?`<span class="pill ${m.decision==="fortsaet"?"ok":m.decision==="juster"?"warn":"bad"}">${DEC[m.decision]}</span>`:`<span class="pill">Afventer beslutning</span>`}</summary>
-      ${msPlanFields(m,as,num)}
-      <div class="gatebox">
-        <h3>Beslutningspunkt</h3>
-        <p class="small muted">Sammenlign resultatet med antagelserne, og beslut hvad der sker nu.</p>
-        ${tests.length?`<div style="margin:6px 0 12px">${tests.map(a=>`<div class="gate-a"><span><b>${num[a.id]}</b> ${esc(a.text)}${a.expected?` <span class="muted">(forventet: ${esc(a.expected)})</span>`:""}</span>
-          <input type="text" data-k="a.${a.id}.actual" value="${esc(a.actual)}" placeholder="Faktisk værdi" aria-label="Faktisk værdi for ${num[a.id]}">
-          <select data-k="a.${a.id}.status" aria-label="Status for ${num[a.id]}">${Object.entries(STATUS).map(([k,l])=>`<option value="${k}" ${(a.status||"ikke")===k?"selected":""}>${l}</option>`).join("")}</select></div>`).join("")}</div>`:""}
-        <label class="f" for="m-${m.id}-result">Resultat og læring</label><textarea id="m-${m.id}-result" data-k="m.${m.id}.result" rows="2" placeholder="Hvad viste testen?">${esc(m.result)}</textarea>
-        <div class="choice" role="group" aria-label="Beslutning">${Object.entries(DEC).map(([k,l])=>`<button type="button" class="${k}" aria-pressed="${m.decision===k}" data-act="decide" data-id="${m.id}" data-dec="${k}">${l}</button>`).join("")}</div>
-        <label class="f" for="m-${m.id}-why">Begrundelse</label><textarea id="m-${m.id}-why" data-k="m.${m.id}.rationale" rows="2" placeholder="Hvorfor denne beslutning?">${esc(m.rationale)}</textarea>
-        ${m.decision?`<p class="small muted" style="margin:8px 0 0">Besluttet af ${esc(nameOf(m.decidedBy))} ${fmtTs(m.decidedAt)}. <button class="btn ghost small" type="button" data-act="undecide" data-id="${m.id}" style="padding:2px 6px">Fortryd beslutning</button></p>`:""}
-      </div>
-      <div class="row-actions" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost danger" type="button" data-act="del-ms" data-id="${m.id}">Slet milepæl</button></div>
-    </details>`}).join("");
-  return `<p class="lead">Hver milepæl er et billigt eksperiment, der tester en eller flere antagelser. Når den er nået, sammenligner I resultatet med antagelserne og beslutter, om projektet fortsætter, justeres eller stoppes, før der bruges flere ressourcer.</p>
-    ${path}
-    ${msButtons(ms.length)}
-    ${ms.length?cards:msEmpty()}`;
-}
 
 /* ---------- forløbet: Opret projekt / Ret planen ---------- */
 const WIZ_STEPS=[["projekt","Projekt"],["gevinst","Gevinst"],["antagelser","Antagelser"],["milepaele","Milepæle"]];
@@ -564,14 +588,39 @@ function wizStep1(d){
     <div><label class="f" for="np-desc">Hvilket problem skal værktøjet løse?</label><textarea id="np-desc" data-k="p.description" rows="3">${esc(d.description)}</textarea></div>
   </div>`;
 }
+/* kladde til "Ret planen": kun plandelen af projektet. Status, resultater, beslutninger og noter rører forløbet ikke */
+const A_PLAN=["text","cat","impact","uncertainty","expected","order"],M_PLAN=["name","desc","date","budget","tests","order"];
+const pick=(o,keys)=>{const r={};keys.forEach(k=>{if(k in o)r[k]=clone(o[k])});return r};
+function editDraft(o){
+  const d={name:o.name||"",department:o.department||"",description:o.description||"",rev:rev(o),assumptions:{},milestones:{}};
+  listOf(o.assumptions).forEach(a=>{d.assumptions[a.id]=Object.assign({text:"",cat:"gevinst",impact:2,uncertainty:2,expected:"",order:0},pick(a,A_PLAN))});
+  listOf(o.milestones).forEach(m=>{d.milestones[m.id]=Object.assign({name:"",desc:"",date:"",budget:"",tests:{},order:0},pick(m,M_PLAN))});
+  return d;
+}
+/* patchen fra "Gem planen": plandele for alt i kladden; fjernede elementer markeres deleted (kun hvis de fandtes før) */
+function planPatch(draft,orig){
+  const part=(dr,og,keys)=>{
+    const out={};dr=dr||{};og=og||{};
+    for(const [id,x] of Object.entries(dr)){if(x&&x.deleted){if(og[id])out[id]={deleted:true}}else if(x)out[id]=pick(x,keys)}
+    for(const [id,x] of Object.entries(og)){if(x&&!x.deleted&&!(id in dr))out[id]={deleted:true}}
+    return out;
+  };
+  return {name:String(draft.name||"").trim(),department:draft.department||"",description:draft.description||"",rev:clone(draft.rev||{}),
+    assumptions:part(draft.assumptions,orig.assumptions,A_PLAN),milestones:part(draft.milestones,orig.milestones,M_PLAN)};
+}
 function renderWizard(){
   const w=view.wiz;
-  if(!w.draft)w.draft=newDraft();
+  if(!w.draft){if(w.mode==="edit"){w.orig=P();w.draft=editDraft(w.orig)}else w.draft=newDraft()}
   const d=w.draft,isNew=w.mode==="new";
+  const locked=isNew?null:(kind,id)=>{
+    const o=w.orig||{};
+    if(kind==="a"){const a=(o.assumptions||{})[id];return !!(a&&a.status&&a.status!=="ikke")}
+    const m=(o.milestones||{})[id];return !!(m&&m.decision);
+  };
   const body=w.step===1?wizStep1(d)
     :w.step===2?`<div class="two"><div id="rev-out">${revOut(rev(d))}</div>${revFields(rev(d))}</div>`
-    :w.step===3?`<div class="two ass"><div>${assPlanList(d)}</div><div class="stack">${assPrioPanel(d,{withStatus:false})}</div></div>`
-    :msPlanList(d);
+    :w.step===3?`<div class="two ass"><div>${assPlanList(d,locked)}</div><div class="stack">${assPrioPanel(d,{withStatus:false})}</div></div>`
+    :msPlanList(d,locked);
   const next=w.step<4
     ?`<button class="btn primary" type="button" data-act="wiz-next">Næste: ${WIZ_STEPS[w.step][1]}</button>`
     :`<button class="btn primary" type="button" data-act="wiz-finish">${isNew?"Opret projekt":"Gem planen"}</button>`;
@@ -687,15 +736,15 @@ document.addEventListener("click",async e=>{
   if(act==="pf-reset"){view.pfilter=emptyPfilter();render();return}
   if(act==="close-toast"){$("#toast").classList.remove("show");return}
   if(act==="home-tab"){view.home=b.dataset.home;setHash();render();afterRoute();return}
-  if(act==="open-build"){flushAll();view.wiz=null;view.pid=b.dataset.id;view.tab="bygget";setHash();render();window.scrollTo(0,0);afterRoute();return}
+  if(act==="open-build"){flushAll();view.wiz=null;view.pid=b.dataset.id;view.scrollTo="bygget";setHash();render();afterRoute();return}
   if(act==="home"){flushAll();view.wiz=null;view.pid=null;setHash();render();afterRoute();return}
-  if(act==="open"){view.wiz=null;view.pid=b.dataset.id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);afterRoute();return}
-  if(act==="tab"){flushAll();view.tab=b.dataset.tab;setHash();render();afterRoute();return}
+  if(act==="open"){view.wiz=null;view.pid=b.dataset.id;setHash();render();window.scrollTo(0,0);afterRoute();return}
   if(act==="wiz-cancel"&&view.wiz){closeWizard(view.wiz.mode==="edit"?view.wiz.pid:null);return}
   if(act==="export-json")return exportJson();
   if(act==="export-csv")return exportCsv();
   if(!canEdit())return;
   if(act==="new-project"){openWizard("new");return}
+  if(act==="edit-plan"&&view.pid){openWizard("edit",view.pid);return}
   if(view.wiz){
     const w=view.wiz;
     const needName=()=>{if(String(w.draft.name||"").trim())return false;w.step=1;render();toast("Giv projektet et navn.");const i=$("#np-name");if(i)i.focus();return true};
@@ -703,11 +752,17 @@ document.addEventListener("click",async e=>{
     if(act==="wiz-next"){if(w.step===1&&needName())return;w.step=Math.min(4,w.step+1);render();window.scrollTo(0,0);afterRoute();return}
     if(act==="wiz-finish"){
       if(needName())return;
+      if(w.mode==="edit"){
+        const pid=w.pid;
+        queuePatch(pid,planPatch(w.draft,w.orig),0);flushAll();
+        view.wiz=null;view.pid=pid;setHash();render();window.scrollTo(0,0);afterRoute();toast("Planen er gemt.");
+        return;
+      }
       b.disabled=true;
       const now=Date.now(),m0=mode,d=clone(w.draft);
       const id=await createProject(Object.assign(d,{name:String(d.name).trim(),createdBy:meId||null,createdAt:now,updatedAt:now,feedback:{}}));
       b.disabled=false;
-      if(id&&mode===m0){view.wiz=null;view.pid=id;view.tab="gevinst";setHash();render();window.scrollTo(0,0);afterRoute()}
+      if(id&&mode===m0){view.wiz=null;view.pid=id;setHash();render();window.scrollTo(0,0);afterRoute()}
       return;
     }
   }
@@ -730,7 +785,6 @@ document.addEventListener("click",async e=>{
     ];
     const existing=new Set(listOf(p.assumptions).map(a=>a.text));
     let n=0;sug.forEach(s=>{if(!existing.has(s.text)){addAssumption(cur(),s);n++}});
-    if(!view.wiz){view.tab="antagelser";setHash()}
     render();toast(n?`${n} antagelser er tilføjet.`:"Antagelserne findes allerede.");return;
   }
   if(act==="add-ms"){const id=newId();applyPatch({milestones:{[id]:{name:"",desc:"",date:"",budget:"",tests:{},result:"",decision:"",rationale:"",order:nextOrder(p.milestones)}}});render();const t=document.querySelector(`[data-k="m.${id}.name"]`);if(t)t.focus();return}
@@ -780,7 +834,7 @@ let tt;function toast(m,o){
 }
 /* hash: [demo-]p-<id>-<fane>; demo-visningen har præfikset "demo" */
 function setHash(){
-  const body=view.wiz?(view.wiz.mode==="new"?"nyt":`p-${view.wiz.pid}-plan`):view.pid?`p-${view.pid}-${view.tab}`:view.home==="katalog"?"katalog":"";
+  const body=view.wiz?(view.wiz.mode==="new"?"nyt":`p-${view.wiz.pid}-plan`):view.pid?`p-${view.pid}`:view.home==="katalog"?"katalog":"";
   const h=[mode==="demo"?"demo":"",body].filter(Boolean).join("-");
   if(location.hash.slice(1)!==h)history.replaceState(null,"",h?"#"+h:location.pathname+location.search);
 }
@@ -788,10 +842,14 @@ function readHashFrom(hash){
   let s=String(hash||"").replace(/^#/,""),m="live";
   if(/^demo(-|$)/.test(s)){m="demo";s=s.replace(/^demo-?/,"")}
   if(m!==mode){flushAll();applyMode(m)}
-  view.wiz=null;
-  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|bygget|evaluering))?$/.exec(s);
+  view.wiz=null;view.scrollTo=null;
+  const r=/^p-([a-z0-9-]+?)(?:-(gevinst|antagelser|milepaele|bygget|evaluering|plan))?$/.exec(s);
   if(s==="nyt"){view.pid=null;view.home="projekter";view.wiz={mode:"new",pid:null,step:1,draft:null,orig:null}}
-  else if(r){view.pid=r[1];view.tab=r[2]||"gevinst"}
+  else if(r){
+    view.pid=r[1];
+    if(r[2]==="plan")view.wiz={mode:"edit",pid:r[1],step:1,draft:null,orig:null};
+    else if(r[2])view.scrollTo=r[2]==="gevinst"?"plan":r[2];
+  }
   else{view.pid=null;view.home=s==="katalog"?"katalog":"projekter"}
   setHash();
 }
@@ -802,7 +860,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,fmtPayback,httpBackend,toast,allStackTags,addTag,removeTag,addNote,deleteNote,renderNotes,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,fmtPayback,httpBackend,toast,allStackTags,addTag,removeTag,addNote,deleteNote,renderNotes,planPatch,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()},
   setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };
