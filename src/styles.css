@@ -226,3 +226,5 @@ details *{box-sizing:border-box}
 .plan-desc{max-width:72ch}
 .a-text{margin:0 0 6px;font-weight:500}
 .ms.next>.ms-head{border-color:var(--info)}
+/* forløbets trinviser ombryder på smalle skærme i stedet for at rulle vandret */
+@media (max-width:640px){.steps[aria-label="Trin"]{flex-wrap:wrap;overflow:visible}}
