@@ -328,7 +328,7 @@ const PF = {
 };
 const ids = r => r.map(x => x.id);
 test("filtre: standard er alle, senest ændret først", () => eq(ids(DDP.projectItems(PF, {})), ["d","a","c","b"]));
-test("filtre: flere statusser på én gang", () => eq(ids(DDP.projectItems(PF, {status:["I test","Stoppet"]})), ["d","a","b"]));
+test("filtre: flere statusser på én gang", () => eq(ids(DDP.projectItems(PF, {status:["I test","Stoppet"]})), ["a","b"]));
 test("filtre: afdeling", () => eq(ids(DDP.projectItems(PF, {dep:"HR"})), ["c"]));
 test("filtre: søgning i problembeskrivelsen", () => eq(ids(DDP.projectItems(PF, {q:"AFSTEMNING"})), ["b"]));
 test("filtre: sortering efter næste milepæl, uden dato sidst", () => eq(ids(DDP.projectItems(PF, {sort:"next"})), ["d","a","c","b"]));
@@ -353,7 +353,7 @@ test("filtre: nulstilles ved skift af visning", () => {
   DDP.state().view.pfilter.dep = "HR"; DDP.setMode("live");
   eq(DDP.state().view.pfilter, {q:"", dep:"", status:[], sort:"updated"});
 });
-test("farver: I test har sin egen farve, ikke accent", () => eq(DDP.status({assumptions:{x:{}}}), ["I test","info"]));
+test("farver: I test har sin egen farve, ikke accent", () => eq(DDP.status({assumptions:{x:{status:"delvist"}}}), ["I test","info"]));
 test("farver: kun én fyldt knap på forsiden", () => {
   DDP.setMode("demo"); DDP.readHashFrom("#demo"); DDP.render();
   eq(appEl().querySelectorAll(".btn.primary").length, 1); DDP.setMode("live");
@@ -396,6 +396,10 @@ test("gevinst: panelet viser råderum og tilbagebetaling, ikke levetid", () => {
   ok(t.includes("Råderum pr. år")); ok(t.includes("tjent hjem")); ok(!t.includes("Forventet levetid")); ok(!appEl().querySelector('[data-k="rev.lifetime"]'));
   DDP.setMode("live");
 });
+
+/* Statusregel */
+test("status: antagelser uden status er stadig Under planlægning", () => eq(DDP.status({assumptions:{x:{status:"ikke"}, y:{}}})[0], "Under planlægning"));
+test("status: én testet antagelse giver I test", () => eq(DDP.status({assumptions:{x:{status:"holder"}, y:{status:"ikke"}}}), ["I test","info"]));
 
 runAll();
 </script>

@@ -536,7 +536,8 @@ function fmtPayback(months){
 }
 function status(p){
   const dec=listOf(p.milestones).filter(m=>m.decision&&m.decidedAt).sort((a,b)=>b.decidedAt-a.decidedAt);
-  if(!dec.length)return listOf(p.assumptions).length?["I test","info"]:["Under planlægning",""];
+  /* uden beslutning: "I test" først når mindst én antagelse er testet; projekter oprettes nu med antagelser fra start */
+  if(!dec.length)return listOf(p.assumptions).some(a=>a.status&&a.status!=="ikke")?["I test","info"]:["Under planlægning",""];
   const d=dec[0].decision;
   if(d==="fortsaet"&&p.build&&p.build.live)return ["I drift","ok"];
   return d==="stop"?["Stoppet","bad"]:d==="juster"?["Justeres","warn"]:["Fortsætter","ok"];

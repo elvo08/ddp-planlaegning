@@ -123,8 +123,8 @@ Projektets status udledes af den seneste beslutning ved en milepæl:
 
 | Status | Hvornår |
 |---|---|
-| Under planlægning | Ingen antagelser endnu |
-| I test | Antagelser findes, men ingen beslutning er truffet |
+| Under planlægning | Ingen antagelse er testet, og ingen beslutning er truffet |
+| I test | Mindst én antagelse er testet, men ingen beslutning er truffet |
 | Fortsætter / Justeres / Stoppet | Seneste beslutning var Fortsæt, Justér eller Stop |
 | I drift | Seneste beslutning var Fortsæt, og værktøjet er markeret i drift under "Sådan er det bygget" |
 
