@@ -401,6 +401,59 @@ test("gevinst: panelet viser råderum og tilbagebetaling, ikke levetid", () => {
 test("status: antagelser uden status er stadig Under planlægning", () => eq(DDP.status({assumptions:{x:{status:"ikke"}, y:{}}})[0], "Under planlægning"));
 test("status: én testet antagelse giver I test", () => eq(DDP.status({assumptions:{x:{status:"holder"}, y:{status:"ikke"}}}), ["I test","info"]));
 
+/* Noter */
+const notesHost = html => { appEl().innerHTML = `<fieldset class="all">${html}</fieldset>`; };
+test("noter: addNote skriver tekst, navn og tidspunkt på projektet", async () => {
+  DDP.setMode("live"); window.__snap({docs:[fakeDoc("n1",{name:"N", assumptions:{a:{text:"x"}}, milestones:{m:{name:"y"}}})], size:1, metadata:{fromCache:false}});
+  DDP.readHashFrom("#p-n1"); window.__writes.length = 0;
+  const nid = DDP.addNote("p", "n1", "  Mere kontekst  "); DDP.flushAll(); await tick();
+  const n = DDP.state().projects.n1.notes[nid];
+  eq(n.text, "Mere kontekst"); eq(n.by, "me"); ok(n.at > 0); eq(n.order, 1);
+  eq(window.__writes.length, 1); eq(window.__writes[0].p.notes[nid].text, "Mere kontekst");
+});
+test("noter: på antagelse og milepæl ligger noten under elementet", () => {
+  const a = DDP.addNote("a", "a", "om antagelsen"), m = DDP.addNote("m", "m", "om milepælen");
+  eq(DDP.state().projects.n1.assumptions.a.notes[a].text, "om antagelsen");
+  eq(DDP.state().projects.n1.milestones.m.notes[m].text, "om milepælen");
+});
+test("noter: tom note afvises", async () => {
+  window.__writes.length = 0; DDP.flushAll(); await tick(); window.__writes.length = 0;
+  eq(DDP.addNote("p", "n1", "   "), null); DDP.flushAll(); await tick(); eq(window.__writes.length, 0);
+});
+test("noter: slet sætter deleted, og listen skjuler den", () => {
+  const nid = DDP.addNote("p", "n1", "væk"); DDP.deleteNote("p", "n1", nid);
+  eq(DDP.state().projects.n1.notes[nid].deleted, true);
+  notesHost(DDP.renderNotes("p", "n1", DDP.state().projects.n1.notes, {open:true}));
+  ok(!appEl().textContent.includes("væk"));
+});
+test("noter: listen viser navn og tidspunkt, og knapper virker", async () => {
+  const notes = DDP.state().projects.n1.notes;
+  notesHost(DDP.renderNotes("p", "n1", notes, {open:true}));
+  ok(appEl().textContent.includes("Mere kontekst")); ok(appEl().textContent.includes("dig"));
+  ok(appEl().querySelector("details.notes").open);
+  appEl().querySelector("textarea[data-note]").value = "fra knappen";
+  appEl().querySelector('[data-act="add-note"]').click();
+  ok(Object.values(DDP.state().projects.n1.notes).some(n => n.text === "fra knappen"));
+});
+test("noter: Enter i feltet tilføjer, Shift+Enter gør ikke", () => {
+  notesHost(DDP.renderNotes("p", "n1", DDP.state().projects.n1.notes, {open:true}));
+  const ta = appEl().querySelector("textarea[data-note]"); const before = Object.keys(DDP.state().projects.n1.notes).length;
+  ta.value = "med shift"; ta.dispatchEvent(new KeyboardEvent("keydown", {key:"Enter", shiftKey:true, bubbles:true}));
+  eq(Object.keys(DDP.state().projects.n1.notes).length, before);
+  ta.value = "med enter"; ta.dispatchEvent(new KeyboardEvent("keydown", {key:"Enter", bubbles:true}));
+  eq(Object.keys(DDP.state().projects.n1.notes).length, before + 1);
+});
+test("noter: antagelse uden noter er foldet sammen, med noter foldet ud", () => {
+  notesHost(DDP.renderNotes("a", "a", {}, {open:false}) + DDP.renderNotes("a", "a", DDP.state().projects.n1.assumptions.a.notes, {open:true}));
+  const d = appEl().querySelectorAll("details.notes"); eq(d[0].open, false); eq(d[1].open, true); ok(d[0].textContent.includes("Noter (0)"));
+});
+test("noter: demo skriver intet", async () => {
+  DDP.flushAll(); await tick(); DDP.setMode("demo"); const id = Object.keys(DDP.state().projects)[0]; DDP.readHashFrom("#demo-p-"+id);
+  window.__writes.length = 0; DDP.addNote("p", id, "demo-note"); DDP.flushAll(); await tick();
+  eq(window.__writes.length, 0); ok(Object.values(DDP.state().projects[id].notes).some(n => n.text === "demo-note"));
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

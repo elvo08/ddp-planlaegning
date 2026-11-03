@@ -130,6 +130,45 @@ function removeTag(pid,tag){
 }
 function aNum(p){const m={};listOf(p.assumptions).forEach((a,i)=>m[a.id]="A"+(i+1));return m}
 
+/* ---------- noter ---------- */
+/* kind: "p" (projekt, id = projekt-id), "a" (antagelse) eller "m" (milepæl); for a/m er projektet view.pid */
+function notePatch(kind,id,nid,note){
+  if(kind==="a")return {assumptions:{[id]:{notes:{[nid]:note}}}};
+  if(kind==="m")return {milestones:{[id]:{notes:{[nid]:note}}}};
+  return {notes:{[nid]:note}};
+}
+function notesOf(kind,id){
+  const p=projects[kind==="p"?id:view.pid];if(!p)return {};
+  if(kind==="a")return (p.assumptions&&p.assumptions[id]&&p.assumptions[id].notes)||{};
+  if(kind==="m")return (p.milestones&&p.milestones[id]&&p.milestones[id].notes)||{};
+  return p.notes||{};
+}
+function addNote(kind,id,text){
+  const t=String(text??"").trim();if(!t)return null;
+  const pid=kind==="p"?id:view.pid;if(!projects[pid])return null;
+  const nid=newId();
+  queuePatch(pid,notePatch(kind,id,nid,{text:t,by:meId||null,at:Date.now(),order:nextOrder(notesOf(kind,id))}),0);
+  return nid;
+}
+function deleteNote(kind,id,nid){queuePatch(kind==="p"?id:view.pid,notePatch(kind,id,nid,{deleted:true}),0)}
+function renderNotes(kind,id,notesObj,o){
+  const list=listOf(notesObj),key=`${kind}.${id}`,open=o&&o.open;
+  return `<details class="notes" data-notes="${esc(key)}" ${open?"open":""}><summary>Noter (${list.length})</summary>
+    ${list.length?`<ul class="note-list">${list.map(n=>`<li><div class="note-text">${esc(n.text)}</div><div class="small muted">${esc(nameOf(n.by))} · ${fmtTs(n.at)} <button type="button" class="linkbtn" data-act="del-note" data-note="${esc(key)}" data-nid="${esc(n.id)}" aria-label="Slet note">Slet</button></div></li>`).join("")}</ul>`:""}
+    <div class="note-form"><textarea data-note="${esc(key)}" rows="2" aria-label="Ny note" placeholder="Skriv en note …"></textarea>
+      <button type="button" class="btn" data-act="add-note" data-note="${esc(key)}">Tilføj note</button></div>
+    <p class="small muted">Enter tilføjer, Shift+Enter giver linjeskift.</p>
+  </details>`;
+}
+/* fælles for knappen og Enter: læs feltet, gem, tegn om, og sæt fokus i det nye felt */
+function submitNote(ta){
+  if(!ta||!canEdit())return;
+  const [kind,id]=ta.dataset.note.split(".");
+  const nid=addNote(kind,id,ta.value);if(!nid)return;
+  ta.value="";render();
+  const n=document.querySelector(`textarea[data-note="${CSS.escape(ta.dataset.note)}"]`);if(n)n.focus({preventScroll:true});
+}
+
 /* ---------- names ---------- */
 async function resolveNames(){
   if(!userCap)return;
@@ -553,6 +592,11 @@ document.addEventListener("input",onField);
 document.addEventListener("change",onField);
 document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.dataset&&d.dataset.ms)view.msOpen[d.dataset.ms]=d.open},true);
 document.addEventListener("keydown",e=>{
+  const el=e.target;if(!el.dataset||!el.dataset.note)return;
+  if(e.key!=="Enter"||e.shiftKey)return;
+  e.preventDefault();submitNote(el);
+});
+document.addEventListener("keydown",e=>{
   const el=e.target;if(!el.dataset||!el.dataset.tagin||!view.pid)return;
   if(e.key!=="Enter"&&e.key!==",")return;
   e.preventDefault();addTag(view.pid,el.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();
@@ -596,6 +640,8 @@ document.addEventListener("click",async e=>{
   }
   if(!p)return;
   if(act==="del-project"){if(!confirm(mode==="demo"?`Slet "${p.name||"projektet"}" fra demoen? Det kommer tilbage, når siden genindlæses.`:`Slet "${p.name||"projektet"}" for alle? Det kan ikke fortrydes.`))return;const id=view.pid;view.pid=null;setHash();await deleteProject(id);render();toast("Projektet er slettet.");return}
+  if(act==="add-note"){const box=b.closest(".notes");submitNote(box&&box.querySelector("textarea[data-note]"));return}
+  if(act==="del-note"){const [kind,id]=b.dataset.note.split(".");deleteNote(kind,id,b.dataset.nid);render();return}
   if(act==="add-ass"){const id=addAssumption(p,{});render();const t=document.querySelector(`[data-k="a.${id}.text"]`);if(t)t.focus();return}
   if(act==="add-tag"){const i=$("#tag-in");addTag(view.pid,i.value.replace(/,/g,""));render();const n=$("#tag-in");if(n)n.focus();return}
   if(act==="del-tag"){removeTag(view.pid,b.dataset.tag);render();return}
@@ -679,7 +725,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,fmtPayback,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,fmtPayback,httpBackend,toast,allStackTags,addTag,removeTag,addNote,deleteNote,renderNotes,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()},
   setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };
