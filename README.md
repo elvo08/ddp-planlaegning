@@ -13,14 +13,71 @@ Det er et MVP. Alt brugervendt sprog er dansk.
 - **Evaluering.** Brugerne vurderer, om metoden hjalp. Svarene bruges som empiri om selve metoden.
 - **Projektoversigt og værktøjskatalog.** Forsiden viser alle projekter med status og filtre, og kataloget viser de dokumenterede værktøjer på tværs af afdelinger.
 
-## Metoden kort
+## Metoden: Discovery-Driven Planning
 
-Discovery-Driven Planning er lavet til projekter, hvor man ved lidt og antager meget. I stedet for at lave en detaljeret plan ud fra gæt, gør man gættene synlige og tester dem billigst muligt først.
+Discovery-Driven Planning (DDP) blev beskrevet af Rita Gunther McGrath og Ian C. MacMillan i Harvard Business Review i 1995 og udbygget i bogen *Discovery-Driven Growth* fra 2009. Afsnittet her forklarer metodens trin, hvorfor de findes, og hvordan værktøjet bruger dem. Kilderne står nederst i afsnittet.
 
-1. **Regn baglæns.** Hvad skal projektet mindst give? Hvad må det så højst koste? Hvad skal være sandt, for at det hænger sammen?
-2. **Skriv antagelserne ned.** Hver antagelse får en kategori, en betydning og en usikkerhed. De vigtigste og mest usikre testes først.
-3. **Planlæg milepæle som test.** En milepæl er ikke en leverance, men et tidspunkt, hvor bestemte antagelser bliver be- eller afkræftet.
-4. **Beslut ved hver milepæl.** Fortsæt, justér planen, eller stop, før der er brugt flere penge.
+### Hvorfor konventionel planlægning svigter i nye projekter
+
+Artiklen åbner med tre kendte fiaskoer: Disneys europæiske forlystelsespark havde tabt over en milliard dollar efter to år, Federal Express tabte 600 millioner dollar på faxproduktet Zap-mail, og Polaroid tabte 200 millioner dollar på instant-film. Forfatternes pointe er, at virksomhederne planlagde de nye satsninger, som om de var kendte forretninger: med detaljerede budgetter og prognoser, der blev behandlet som fakta.
+
+Det går galt, fordi forholdet mellem antagelser og viden er omvendt i nye projekter. I en kendt forretning bygger planen på erfaring, og afvigelser er fejl, der skal rettes. I et nyt projekt bygger planen på gæt, og afvigelser er ny viden. McGrath og MacMillan kalder den første form for planlægning *platform-based planning*: man står på en platform af viden og planlægger derfra. Den passer ikke til projekter, hvor platformen ikke findes endnu.
+
+Interne, AI-assisterede udviklingsværktøjer er netop sådanne projekter. Ingen ved på forhånd, om kollegerne vil bruge værktøjet, hvor meget tid det sparer, eller hvor meget vedligehold det kræver. Derfor er DDP valgt som metode.
+
+### Grundidéen
+
+DDP vender logikken om: man planlægger for at lære, ikke for at forudsige. Planen er en samling antagelser, der gøres eksplicitte og testes billigst muligt først. Penge og tid frigives i små portioner, og hver portion skal købe viden, der afgør, om den næste er værd at bruge. McGrath og MacMillan formulerer det som, at man skal omdanne antagelser til viden til lavest mulige omkostning.
+
+Det bygger videre på Block og MacMillans tidligere arbejde fra 1985 om milepæle i venturer, hvor en milepæl ikke er en leverance, men et punkt, hvor noget centralt bliver afgjort.
+
+### Metodens fire dokumenter og det femte trin
+
+Artiklen fra 1995 beskriver fire dokumenter, der hænger sammen, og en disciplin til at holde dem opdaterede. Bogen fra 2009 beholder kernen, men tilføjer et indledende trin, hvor man rammer satsningen ind (*framing*) og sammenligner med kendte tal (*benchmarking*), før man regner.
+
+**1. Den omvendte resultatopgørelse (reverse income statement).**
+*Hvad:* I stedet for at estimere omsætning og omkostninger og se, hvad der bliver tilbage, starter man med den gevinst, projektet skal give for at være umagen værd. Derfra regner man baglæns: hvilken bruttogevinst kræver det, og hvad må projektet så højst koste?
+*Hvorfor:* Et almindeligt budget starter med det, man tror, man kan opnå, og ender ofte med et resultat, der ser fint ud på papiret. Det omvendte regnestykke tvinger én til at tage stilling til, hvad der *skal* være sandt, og gør kravene synlige, før der er brugt penge. Det er også her, projektet kan stoppes tidligst: hvis de krævede tal er urealistiske, er der ingen grund til at gå videre.
+*I værktøjet:* Fanen **Gevinstregnskab**. Krævet nettogevinst og margin giver bruttogevinst og tilladte omkostninger, og timeprisen oversætter det til, hvor mange timer hver bruger skal spare om ugen.
+
+**2. Specifikation af driften (pro forma operations specifications).**
+*Hvad:* Hvilke aktiviteter skal der til for at levere gevinsten, og hvad koster de? For et internt værktøj er det udviklingstid, engangsudgifter, vedligehold og drift.
+*Hvorfor:* Omkostningerne i det omvendte regnestykke må ikke være et rundt tal. De skal udledes af, hvad der faktisk skal gøres, så man kan se, om de tilladte omkostninger er nok til at gøre det.
+*I værktøjet:* Felterne under **Forventede omkostninger** på gevinstfanen. Værktøjet sammenligner dem med de tilladte omkostninger og viser, om der er plads, og hvad nulpunktet er.
+
+**3. Tjeklisten over nøgleantagelser (key assumptions checklist).**
+*Hvad:* Hver antagelse, som regnestykket og driften hviler på, skrives ned som en konkret, testbar påstand: hvor mange brugere, hvor mange sparede timer, hvor mange udviklingstimer, hvor meget vedligehold.
+*Hvorfor:* Antagelser, der ikke er skrevet ned, bliver til fakta i folks hoveder. Listen gør det muligt at prioritere: de antagelser, der betyder mest og er mest usikre, skal testes først, fordi de kan vælte projektet billigst. Listen er også det sted, hvor ny viden skrives ind, så planen ændrer sig, når virkeligheden gør.
+*I værktøjet:* Fanen **Antagelser**. Hver antagelse har kategori, betydning, usikkerhed, forventet og faktisk værdi og en status. Knappen "Lav antagelser ud fra tallene" laver de første antagelser direkte fra gevinstregnskabet, så regnestykke og antagelser hænger sammen fra start.
+
+**4. Milepælsplanen (milestone planning chart).**
+*Hvad:* En plan over milepæle, hvor hver milepæl er knyttet til de antagelser, den tester. Milepælene lægges, så de vigtigste og mest usikre antagelser testes først og billigst.
+*Hvorfor:* En milepæl er i DDP ikke "prototypen er færdig", men "ved prototypen finder vi ud af, om brugerne forstår og vil bruge løsningen". Den kobling gør, at man ved, hvad man skal måle, og at man ikke bygger videre på antagelser, der aldrig blev testet. Det er samtidig her, pengene frigives: hver milepæl giver grundlag for at beslutte, om den næste portion er værd at bruge.
+*I værktøjet:* Fanen **Milepæle og beslutninger**. Hver milepæl vælger, hvilke antagelser den tester, og de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot) følger princippet om billigste test først.
+
+**5. Opdatering og beslutning ved hver milepæl.**
+*Hvad:* Når en milepæl er nået, føres resultatet tilbage i antagelseslisten og regnestykket. Holder antagelsen? Holder den delvist? Holder den ikke? Derefter træffes en beslutning: fortsæt, justér planen, eller stop.
+*Hvorfor:* Det er den disciplin, der adskiller DDP fra at lave en plan og lægge den i skuffen. McGrath og MacMillan lægger vægt på, at det skal være legitimt at stoppe eller ændre retning, og at det skal ske tidligt, mens det er billigt. Bogen fra 2009 kalder det at vide, hvornår man skal trække sig fra et tvivlsomt projekt, før det er for sent. En plan, der aldrig fører til et stop, er ikke blevet testet.
+*I værktøjet:* Status på hver antagelse, og beslutningen Fortsæt, Justér eller Stop på hver milepæl, med begrundelse, navn og tidspunkt. Projektets samlede status udledes af den seneste beslutning.
+
+### Hvad værktøjet tilføjer ud over metoden
+
+To faner er ikke en del af DDP, men er tilføjet til formålet her:
+
+- **Sådan er det bygget** samler viden om de færdige værktøjer, så andre afdelinger kan genbruge dele og undgå at bygge det samme igen.
+- **Evaluering** spørger brugerne, om metoden hjalp dem med at se kravene, beslutte og teste. Svarene er empiri om, hvordan DDP fungerer på små, interne AI-projekter.
+
+### Forholdet til Lean Startup
+
+DDP er fra 1995 og deler grundidé med den senere Lean Startup-tilgang: byg småt, test antagelser, og lær hurtigt. McGrath har selv beskrevet sammenhængen og forskellene i en artikel fra 2024. Den væsentligste forskel for dette værktøj er, at DDP starter med økonomien, det omvendte regnestykke, og lader den afgøre, hvilke antagelser der er værd at teste.
+
+### Kilder
+
+- McGrath, R. G. & MacMillan, I. C. (1995). Discovery-Driven Planning. *Harvard Business Review*, 73(4), juli–august 1995, s. 44–54. https://hbr.org/1995/07/discovery-driven-planning
+- McGrath, R. G. & MacMillan, I. C. (2009). *Discovery-Driven Growth: A Breakthrough Process to Reduce Risk and Seize Opportunity*. Harvard Business Press.
+- Block, Z. & MacMillan, I. C. (1985). Milestones for Successful Venture Planning. *Harvard Business Review*, 63(5), s. 84–90.
+- McGrath, R. G. (2024). Who Learns Fastest, Wins: Lean Startup and Discovery Driven Growth. *Journal of Management*, 50(8), s. 3162–3182.
+- Wikipedia: Discovery-driven planning. https://en.wikipedia.org/wiki/Discovery-driven_planning (oversigt og litteraturliste)
 
 ## Sådan bruger du det
 
