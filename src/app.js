@@ -18,7 +18,7 @@ const DEC={fortsaet:"Fortsæt",juster:"Justér",stop:"Stop"};
 const MARK={holder:"✓",delvist:"½",holder_ikke:"✕"};
 const TABS=[["gevinst","Gevinstregnskab"],["antagelser","Antagelser"],["milepaele","Milepæle og beslutninger"],["bygget","Sådan er det bygget"],["evaluering","Evaluering"]];
 const SUGGEST_LABEL="Lav antagelser ud fra tallene";
-const REV_DEFAULT={targetNet:100000,marginPct:50,rate:400,users:5,weeks:46,lifetime:2,devHours:40,oneTime:0,maintHours:4,runMonthly:200};
+const REV_DEFAULT={targetNet:100000,marginPct:50,rate:400,users:5,weeks:46,devHours:40,oneTime:0,maintHours:4,runMonthly:200};
 const FQ=[
   ["q1","Hjalp metoden dig med at se, hvad der skal være sandt, for at projektet er umagen værd?"],
   ["q2","Blev det lettere at beslutte, om projektet skulle fortsætte, justeres eller stoppes?"],
@@ -83,18 +83,26 @@ function listOf(obj){return Object.entries(obj||{}).filter(([,v])=>v&&!v.deleted
 function msSorted(p){return listOf(p.milestones).sort((a,b)=>(a.date||"9999").localeCompare(b.date||"9999")||(a.order||0)-(b.order||0))}
 function calc(r){
   const n=k=>Math.max(0,Number(r[k])||0);
-  const targetNet=n("targetNet"),margin=Math.min(99,Math.max(1,n("marginPct")||1)),rate=n("rate")||1,users=n("users")||1,weeks=n("weeks")||1,life=n("lifetime")||1;
+  const targetNet=n("targetNet"),margin=Math.min(99,Math.max(1,n("marginPct")||1)),rate=n("rate")||1,users=n("users")||1,weeks=n("weeks")||1;
   const gross=targetNet/(margin/100);
   const allow=gross-targetNet;
   const hoursYear=gross/rate;
   const perUserWeek=hoursYear/users/weeks;
+  /* engangs (udvikling) holdes adskilt fra løbende (vedligehold, drift); levetid indgår ikke */
   const build=n("devHours")*rate+n("oneTime");
-  const buildYear=build/life;
   const maintYear=n("maintHours")*12*rate;
   const runYear=n("runMonthly")*12;
-  const est=buildYear+maintYear+runYear;
-  const breakEvenMin=est/rate/users/weeks*60;
-  return {targetNet,margin,rate,users,weeks,life,gross,allow,hoursYear,perUserWeek,build,buildYear,maintYear,runYear,est,slack:allow-est,breakEvenMin};
+  const running=maintYear+runYear;
+  const slack=allow-running;
+  const paybackMonths=slack>0?build/slack*12:Infinity;
+  const breakEvenMin=running/rate/users/weeks*60;
+  return {targetNet,margin,rate,users,weeks,gross,allow,hoursYear,perUserWeek,build,maintYear,runYear,running,slack,paybackMonths,breakEvenMin};
+}
+/* tilbagebetalingstid: måneder op til 24, derefter år; "aldrig" når råderummet er nul eller negativt */
+function fmtPayback(months){
+  if(!isFinite(months))return "aldrig";
+  if(months<=24)return `${nf.format(months)} måneder`;
+  return `${nf1.format(months/12)} år`;
 }
 function status(p){
   const dec=listOf(p.milestones).filter(m=>m.decision&&m.decidedAt).sort((a,b)=>b.decidedAt-a.decidedAt);
@@ -322,13 +330,9 @@ function renderProject(){
 function numField(k,label,val,unit){
   return `<div><label class="f" for="f-${k}">${label}</label><div style="display:flex;align-items:center;gap:6px"><input type="number" id="f-${k}" min="0" step="any" data-k="rev.${k}" data-num="1" data-r="rev" value="${esc(val)}"><span class="small muted" style="white-space:nowrap">${unit}</span></div></div>`;
 }
-function tabRev(p){
-  const r=rev(p);
-  return `<p class="lead">Start med, hvad projektet skal give, ikke med hvad det vil koste. Regn baglæns til, hvad der skal være sandt, og hvad projektet højst må koste. De tal bliver jeres første antagelser.</p>
-  <div style="margin-bottom:20px;max-width:760px"><label class="f" for="p-desc">Hvilket problem skal værktøjet løse?</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
-  <div class="two">
-    <div id="rev-out">${revOut(r)}</div>
-    <div class="stack">
+/* de ni talfelter i gevinstregnskabet (plandel) */
+function revFields(r){
+  return `<div class="stack">
       <div class="panel"><h3>Krævet gevinst</h3><p class="small muted">Hvad skal projektet mindst give om året for at være umagen værd?</p>
         <div class="grid3">
           ${numField("targetNet","Krævet nettogevinst pr. år",r.targetNet,"kr.")}
@@ -336,7 +340,6 @@ function tabRev(p){
           ${numField("rate","Timepris",r.rate,"kr./t")}
           ${numField("users","Antal brugere",r.users,"pers.")}
           ${numField("weeks","Arbejdsuger pr. år",r.weeks,"uger")}
-          ${numField("lifetime","Forventet levetid",r.lifetime,"år")}
         </div>
         <p class="small muted" style="margin:10px 0 0">Gevinstmarginen er den andel af bruttogevinsten, der skal være tilbage, når omkostningerne er trukket fra.</p>
       </div>
@@ -348,13 +351,27 @@ function tabRev(p){
           ${numField("runMonthly","Drift og licenser pr. måned",r.runMonthly,"kr.")}
         </div>
       </div>
-    </div>
+    </div>`;
+}
+function tabRev(p){
+  const r=rev(p);
+  return `<p class="lead">Start med, hvad projektet skal give, ikke med hvad det vil koste. Regn baglæns til, hvad der skal være sandt, og hvad projektet højst må koste. De tal bliver jeres første antagelser.</p>
+  <div style="margin-bottom:20px;max-width:760px"><label class="f" for="p-desc">Hvilket problem skal værktøjet løse?</label><textarea id="p-desc" data-k="p.description" rows="2">${esc(p.description)}</textarea></div>
+  <div class="two">
+    <div id="rev-out">${revOut(r)}</div>
+    ${revFields(r)}
   </div>`;
+}
+/* teksten under søjlerne: tjent hjem efter … / aldrig */
+function revVerdict(c){
+  return c.slack>0
+    ?`Udviklingen er tjent hjem efter ${fmtPayback(c.paybackMonths)}. Derefter ligger omkostningerne ${kr(c.slack)} under rammen om året.`
+    :`Udviklingen bliver aldrig tjent hjem: de løbende omkostninger alene overstiger rammen med ${kr(-c.slack)}.`;
 }
 function revOut(r){
   const c=calc(r);
-  const mx=Math.max(c.allow,c.est,1);
-  const ok=c.slack>=0;
+  const mx=Math.max(c.allow,c.running,1);
+  const ok=c.slack>0;
   return `<div class="panel" style="position:sticky;top:calc(16px + env(safe-area-inset-top,0px))">
     <p class="statement">Hver bruger skal spare <strong>${nf1.format(c.perUserWeek)} timer om ugen</strong>, for at projektet er umagen værd.</p>
     <p class="small muted">Det svarer til ${nf.format(c.hoursYear)} sparede timer om året fordelt på ${nf.format(c.users)} brugere.</p>
@@ -364,19 +381,18 @@ function revOut(r){
       <tr class="sum"><td>Tilladte omkostninger pr. år</td><td>${kr(c.allow)}</td></tr>
     </table>
     <table class="ledger" style="margin-top:18px">
-      <tr><td>Udvikling fordelt over ${nf1.format(c.life)} år</td><td>${kr(c.buildYear)}</td></tr>
       <tr><td>Vedligehold</td><td>${kr(c.maintYear)}</td></tr>
       <tr><td>Drift og licenser</td><td>${kr(c.runYear)}</td></tr>
-      <tr class="sum"><td>Forventede omkostninger pr. år</td><td>${kr(c.est)}</td></tr>
+      <tr class="sum"><td>Løbende omkostninger pr. år</td><td>${kr(c.running)}</td></tr>
+      <tr class="sum"><td>Råderum pr. år</td><td>${kr(c.slack)}</td></tr>
     </table>
+    <p class="small" style="margin:12px 0 0">Engangsudgift (udvikling og andet): <b>${kr(c.build)}</b></p>
     <div class="cmp">
       <span>Tilladt</span><div class="bar"><i style="width:${c.allow/mx*100}%;background:var(--ink-2)"></i></div><span class="small">${kr(c.allow)}</span>
-      <span>Forventet</span><div class="bar"><i style="width:${c.est/mx*100}%;background:${ok?"var(--ok)":"var(--bad)"}"></i></div><span class="small">${kr(c.est)}</span>
+      <span>Løbende</span><div class="bar"><i style="width:${c.running/mx*100}%;background:${ok?"var(--ok)":"var(--bad)"}"></i></div><span class="small">${kr(c.running)}</span>
     </div>
-    <div class="verdict ${ok?"ok":"bad"}">${ok
-      ?`Omkostningerne ligger ${kr(c.slack)} under rammen. Projektet hviler nu på, at tidsbesparelsen faktisk opnås.`
-      :`Omkostningerne overstiger rammen med ${kr(-c.slack)}. Sænk omkostningerne, find flere brugere, eller overvej om projektet skal startes.`}</div>
-    <p class="small muted" style="margin:12px 0 0">Nulpunkt: hver bruger skal spare ${nf.format(c.breakEvenMin)} minutter om ugen, før værktøjet bare dækker sine egne omkostninger.</p>
+    <div class="verdict ${ok?"ok":"bad"}">${revVerdict(c)}</div>
+    <p class="small muted" style="margin:12px 0 0">Nulpunkt: hver bruger skal spare ${nf.format(c.breakEvenMin)} minutter om ugen, før værktøjet bare dækker sine løbende omkostninger.</p>
     <div style="margin-top:14px"><button class="btn" type="button" data-act="suggest-ass">${SUGGEST_LABEL}</button></div>
   </div>`;
 }
@@ -662,7 +678,7 @@ readHash();
 /* ---------- test hooks ---------- */
 window.DDP={
   state:()=>({mode,projects,liveProjects,demoProjects,view,canWrite}),
-  render,status,calc,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
+  render,status,calc,fmtPayback,httpBackend,toast,allStackTags,addTag,removeTag,catalogItems,projectItems,setMode,queuePatch,flushAll,readHashFrom,
   setCanWrite:b=>{canWrite=b;render()},
   setUserForTest:(u,name)=>{userCap=u;myName=name;askName=false;renderWho();render()}
 };

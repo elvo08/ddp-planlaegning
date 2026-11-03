@@ -93,7 +93,7 @@ Nederst på forsiden udfylder du projektnavn, afdeling og det problem, værktøj
 
 | Trin | Fane | Det gør du |
 |---|---|---|
-| 1 | **Gevinstregnskab** | Skriv krævet nettogevinst, gevinstmargin, timepris, antal brugere og forventede omkostninger. Værktøjet viser med det samme, hvor mange timer hver bruger skal spare om ugen, de tilladte omkostninger og om budgettet holder. Knappen "Lav antagelser ud fra tallene" opretter de første antagelser automatisk. |
+| 1 | **Gevinstregnskab** | Skriv krævet nettogevinst, gevinstmargin, timepris, antal brugere og forventede omkostninger. Værktøjet viser med det samme, hvor mange timer hver bruger skal spare om ugen, råderummet pr. år og hvornår udviklingen er tjent hjem. Knappen "Lav antagelser ud fra tallene" opretter de første antagelser automatisk. |
 | 2 | **Antagelser** | Skriv de forudsætninger, projektet hviler på. Hver antagelse har en kategori (Gevinst, Brug og adoption, Omkostning, Teknisk, Organisatorisk), betydning og usikkerhed (Lav, Mellem, Høj), forventet og faktisk værdi, og en status: Ikke testet, Holder, Holder delvist eller Holder ikke. |
 | 3 | **Milepæle og beslutninger** | Opret milepæle, eller brug de fire standardmilepæle (kortlæg arbejdsgang, klikbar prototype, MVP i brug, pilot i afdelingen). Vælg hvilke antagelser milepælen tester, skriv resultatet, og træf beslutningen: Fortsæt, Justér eller Stop, med begrundelse. |
 | 4 | **Sådan er det bygget** | Beskriv kort hvad værktøjet gør, tech stack som tags, dele andre kan genbruge, links, læringer og kontaktperson. Markér værktøjet som "i drift", når det bruges. Alle felter er frivillige. |
@@ -103,12 +103,19 @@ Nederst på forsiden udfylder du projektnavn, afdeling og det problem, værktøj
 
 Beregningen går baglæns fra den krævede gevinst:
 
-- Krævet bruttogevinst = krævet nettogevinst ÷ gevinstmargin. Marginen er den andel af bruttogevinsten, der skal være tilbage, når omkostningerne er trukket fra. Med 50 % margin skal projektet give dobbelt så meget, som det koster.
-- Tilladte omkostninger pr. år = bruttogevinst minus nettogevinst.
-- Krævede sparede timer = bruttogevinst ÷ timepris, fordelt på brugere og arbejdsuger.
-- Forventede omkostninger = udvikling fordelt over levetiden + vedligehold + drift og licenser.
+| Begreb | Beregning |
+|---|---|
+| Krævet bruttogevinst | krævet nettogevinst ÷ gevinstmargin. Marginen er den andel af bruttogevinsten, der skal være tilbage, når omkostningerne er trukket fra. Med 50 % margin skal projektet give dobbelt så meget, som det koster |
+| Tilladte omkostninger pr. år | bruttogevinst − nettogevinst |
+| Krævede sparede timer | bruttogevinst ÷ timepris, fordelt på brugere og arbejdsuger |
+| Løbende omkostninger pr. år | vedligehold × 12 × timepris + drift og licenser × 12 |
+| Råderum pr. år | tilladte − løbende |
+| Engangsudgift | udviklingstimer × timepris + andre engangsudgifter |
+| Tilbagebetalingstid | engangsudgift ÷ råderum pr. år, vist i måneder (eller år, når over 24 måneder). "Aldrig", hvis råderummet er nul eller negativt |
 
-Ligger de forventede omkostninger under de tilladte, hviler projektet på, at tidsbesparelsen faktisk opnås. Nulpunktet viser, hvor lidt hver bruger skal spare, før værktøjet bare dækker sig selv.
+Der indgår ingen levetid. Man håber, at et internt værktøj holder, så længe behovet findes, så i stedet for at fordele udviklingen over et gættet antal år viser værktøjet, hvor hurtigt engangsudgiften er tjent hjem.
+
+Er råderummet positivt, hviler projektet på, at tidsbesparelsen faktisk opnås. Nulpunktet viser, hvor lidt hver bruger skal spare, før værktøjet bare dækker sine løbende omkostninger.
 
 ### Status
 
@@ -215,7 +222,7 @@ Id'er må kun indeholde bogstaver, tal, `-` og `_`. Se også http://localhost:80
 
 ```
 { name, department, description, createdBy, createdAt, updatedAt,
-  rev:        { targetNet, marginPct, rate, users, weeks, lifetime, devHours, oneTime, maintHours, runMonthly },
+  rev:        { targetNet, marginPct, rate, users, weeks, devHours, oneTime, maintHours, runMonthly, lifetime? (gammelt felt, læses ikke) },
   assumptions:{ <id>: { text, cat, impact, uncertainty, status, expected, actual, order, deleted? } },
   milestones: { <id>: { name, desc, date, budget, tests:{<antagelses-id>:bool}, result,
                         decision, rationale, decidedBy, decidedAt, order, deleted? } },

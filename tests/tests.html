@@ -373,6 +373,30 @@ test("talfelt: markøren bliver sidst i feltet efter gen-rendering", () => {
   DDP.readHashFrom(""); DDP.render();
 });
 
+/* Regnestykke uden levetid */
+const R = {targetNet:100000, marginPct:50, rate:400, users:5, weeks:46, devHours:40, oneTime:0, maintHours:4, runMonthly:200};
+test("calc: råderum, engangsudgift og tilbagebetaling", () => {
+  const c = DDP.calc(R);
+  eq(c.allow, 100000); eq(c.running, 4*12*400 + 200*12); eq(c.slack, 100000 - 21600);
+  eq(c.build, 16000); eq(Math.round(c.paybackMonths*100)/100, Math.round(16000/78400*12*100)/100);
+  ok(!("life" in c) && !("buildYear" in c) && !("est" in c), "levetidsfelter er væk");
+});
+test("calc: råderum nul eller negativt giver aldrig", () => {
+  const c = DDP.calc(Object.assign({}, R, {maintHours:30}));
+  ok(c.slack <= 0); eq(c.paybackMonths, Infinity); eq(DDP.fmtPayback(c.paybackMonths), "aldrig");
+});
+test("calc: gammelt projekt med lifetime regnes uden at bruge det", () => {
+  eq(DDP.calc(Object.assign({lifetime:3}, R)).slack, DDP.calc(R).slack);
+});
+test("calc: tilbagebetaling formateres i måneder op til 24, ellers år", () => {
+  eq(DDP.fmtPayback(2.4), "2 måneder"); eq(DDP.fmtPayback(24), "24 måneder"); eq(DDP.fmtPayback(30), "2,5 år"); eq(DDP.fmtPayback(0), "0 måneder");
+});
+test("gevinst: panelet viser råderum og tilbagebetaling, ikke levetid", () => {
+  openDemo("#demo-p-demo-lager-gevinst"); const t = appEl().textContent;
+  ok(t.includes("Råderum pr. år")); ok(t.includes("tjent hjem")); ok(!t.includes("Forventet levetid")); ok(!appEl().querySelector('[data-k="rev.lifetime"]'));
+  DDP.setMode("live");
+});
+
 runAll();
 </script>
 </body>

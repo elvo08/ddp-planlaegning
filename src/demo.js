@@ -25,7 +25,7 @@ window.DDP_DEMO=(function(){
       name:"Automatisk lagerrapport",department:"Indkøb",
       description:"Indkøb bruger hver mandag to-tre timer på at trække lagertal ud af Shopify og samle dem i et regneark, før der kan bestilles hjem.",
       createdBy:"demo-mette",createdAt:ts("2026-03-04"),updatedAt:ts("2026-10-22"),
-      rev:{targetNet:50000,marginPct:50,rate:400,users:3,weeks:46,lifetime:3,devHours:30,oneTime:0,maintHours:2,runMonthly:0},
+      rev:{targetNet:50000,marginPct:50,rate:400,users:3,weeks:46,devHours:30,oneTime:0,maintHours:2,runMonthly:0},
       assumptions:A([
         ["a1","Hver indkøber sparer 1,8 timer om ugen med værktøjet","gevinst",3,3,"holder","1,8 t/uge","2,1 t/uge"],
         ["a2","3 indkøbere bruger rapporten hver uge","brug",3,2,"holder","3 brugere","3 brugere"],
@@ -60,7 +60,7 @@ window.DDP_DEMO=(function(){
       name:"Hjælp til returhenvendelser",department:"Kundeservice",
       description:"Kundeservice får mange ens spørgsmål om returnering. Et AI-udkast til svaret skal gøre det hurtigere at besvare dem.",
       createdBy:"demo-jonas",createdAt:ts("2026-04-08"),updatedAt:ts("2026-10-14"),
-      rev:{targetNet:120000,marginPct:50,rate:350,users:8,weeks:46,lifetime:2,devHours:60,oneTime:5000,maintHours:6,runMonthly:600},
+      rev:{targetNet:120000,marginPct:50,rate:350,users:8,weeks:46,devHours:60,oneTime:5000,maintHours:6,runMonthly:600},
       assumptions:A([
         ["a1","Hver medarbejder sparer 1,9 timer om ugen","gevinst",3,3,"delvist","1,9 t/uge","0,9 t/uge"],
         ["a2","8 medarbejdere bruger udkastene fast","brug",3,2,"delvist","8 brugere","5 brugere"],
@@ -94,7 +94,7 @@ window.DDP_DEMO=(function(){
       name:"Produkttekster med AI",department:"Marketing",
       description:"Nye produkter ligger ofte i flere uger uden en ordentlig tekst, fordi Marketing ikke når at skrive dem.",
       createdBy:"demo-sara",createdAt:ts("2026-08-18"),updatedAt:ts("2026-10-28"),
-      rev:{targetNet:80000,marginPct:50,rate:380,users:4,weeks:46,lifetime:2,devHours:40,oneTime:0,maintHours:3,runMonthly:400},
+      rev:{targetNet:80000,marginPct:50,rate:380,users:4,weeks:46,devHours:40,oneTime:0,maintHours:3,runMonthly:400},
       assumptions:A([
         ["a1","Hver tekstforfatter sparer 2,3 timer om ugen","gevinst",3,3,"delvist","2,3 t/uge","1,5 t/uge indtil videre"],
         ["a2","AI-teksterne passer til vores tone efter en kort rettelse","gevinst",3,3,"holder","Under 5 min. pr. tekst","Ca. 4 min. pr. tekst"],
@@ -124,7 +124,7 @@ window.DDP_DEMO=(function(){
       name:"Bilagsmatching",department:"Økonomi",
       description:"Økonomi matcher hver måned bilag med banktransaktioner i hånden. Et værktøj skulle foreslå matches automatisk.",
       createdBy:"demo-anders",createdAt:ts("2026-03-16"),updatedAt:ts("2026-07-03"),
-      rev:{targetNet:90000,marginPct:50,rate:420,users:2,weeks:46,lifetime:3,devHours:80,oneTime:10000,maintHours:8,runMonthly:900},
+      rev:{targetNet:90000,marginPct:50,rate:420,users:2,weeks:46,devHours:80,oneTime:10000,maintHours:8,runMonthly:900},
       assumptions:A([
         ["a1","Hver bogholder sparer 4,7 timer om ugen","gevinst",3,3,"holder_ikke","4,7 t/uge","1,2 t/uge"],
         ["a2","80 % af bilagene kan matches automatisk","gevinst",3,3,"holder_ikke","80 %","35 %"],
@@ -156,7 +156,7 @@ window.DDP_DEMO=(function(){
       name:"Pluklister til lageret",department:"Lager",
       description:"Lageret printer pluklister i ordrens rækkefølge, så medarbejderne går de samme gange flere gange. Listerne skal sorteres efter placering.",
       createdBy:"demo-kasper",createdAt:ts("2026-05-05"),updatedAt:ts("2026-10-08"),
-      rev:{targetNet:70000,marginPct:50,rate:300,users:6,weeks:46,lifetime:3,devHours:25,oneTime:0,maintHours:2,runMonthly:0},
+      rev:{targetNet:70000,marginPct:50,rate:300,users:6,weeks:46,devHours:25,oneTime:0,maintHours:2,runMonthly:0},
       assumptions:A([
         ["a1","Hver plukker sparer 1,7 timer om ugen","gevinst",3,3,"holder","1,7 t/uge","1,9 t/uge"],
         ["a2","6 plukkere bruger de nye lister","brug",2,1,"holder","6 brugere","6 brugere"],
@@ -187,7 +187,7 @@ window.DDP_DEMO=(function(){
       name:"Vagtplan-påmindelser",department:"HR",
       description:"Medarbejdere glemmer bytte af vagter, og HR bruger tid på at ringe rundt. Automatiske påmindelser på SMS skal hjælpe.",
       createdBy:"demo-line",createdAt:ts("2026-10-20"),updatedAt:ts("2026-10-27"),
-      rev:{targetNet:40000,marginPct:50,rate:350,users:2,weeks:46,lifetime:2,devHours:20,oneTime:0,maintHours:2,runMonthly:250},
+      rev:{targetNet:40000,marginPct:50,rate:350,users:2,weeks:46,devHours:20,oneTime:0,maintHours:2,runMonthly:250},
       assumptions:{},milestones:{},feedback:{}
     }
   };
