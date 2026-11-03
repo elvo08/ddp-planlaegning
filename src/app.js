@@ -178,9 +178,12 @@ function submitNote(ta){
 async function resolveNames(){
   if(!userCap)return;
   const ids=new Set();
+  const noteBy=o=>listOf(o).forEach(n=>n.by&&ids.add(n.by));
   for(const p of Object.values(projects)){
     if(p.createdBy)ids.add(p.createdBy);
-    listOf(p.milestones).forEach(m=>m.decidedBy&&ids.add(m.decidedBy));
+    listOf(p.milestones).forEach(m=>{m.decidedBy&&ids.add(m.decidedBy);noteBy(m.notes)});
+    listOf(p.assumptions).forEach(a=>noteBy(a.notes));
+    noteBy(p.notes);
     Object.keys(p.feedback||{}).forEach(k=>ids.add(k));
   }
   const missing=[...ids].filter(i=>!(i in names));
@@ -192,8 +195,14 @@ const nameOf=id=>id===meId?"dig":(names[id]||"En kollega");
 /* ---------- rendering ---------- */
 function render(){
   const a=document.activeElement,key=a&&a.dataset?a.dataset.k:null;
+  /* samme data-k kan stå flere steder (fx status i Antagelser og i milepælens beslutningspunkt): husk hvilken kopi der havde fokus */
+  const idx=key?[...document.querySelectorAll(`[data-k="${CSS.escape(key)}"]`)].indexOf(a):-1;
   let sel=null;if(key)try{sel=[a.selectionStart,a.selectionEnd]}catch(e){}
   const val=key&&a.type!=="checkbox"&&a.type!=="radio"?a.value:null;
+  /* noteudkast, åbne noteblokke og fokus i et notefelt overlever gen-rendering */
+  const noteKey=a&&a.dataset&&a.dataset.note?a.dataset.note:null;
+  let noteSel=null;if(noteKey)try{noteSel=[a.selectionStart,a.selectionEnd]}catch(e){}
+  const noteState=[...document.querySelectorAll("details.notes")].map(d=>{const t=d.querySelector("textarea[data-note]");return {k:d.dataset.notes,open:d.open,val:t?t.value:""}}).filter(s=>s.open||s.val);
   const sy=window.scrollY;
   const app=$("#app");
   renderMode();
@@ -211,12 +220,21 @@ function render(){
   const wizTitle=view.wiz?(view.wiz.mode==="new"?"Opret projekt":`Ret planen · ${(P()||{}).name||"Uden navn"}`):"";
   $("#crumb").textContent=view.wiz?wizTitle:view.pid?(P().name||"Uden navn"):"";
   document.title=(view.wiz?`${wizTitle} · `:view.pid?`${P().name||"Uden navn"} · `:view.home==="katalog"?"Værktøjskatalog · ":"")+"DDP-planlægning";
+  noteState.forEach(s=>{
+    const d=document.querySelector(`details.notes[data-notes="${CSS.escape(s.k)}"]`);if(!d)return;
+    if(s.open)d.open=true;
+    const t=d.querySelector("textarea[data-note]");if(t&&s.val)t.value=s.val;
+  });
   if(key){
-    const el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
+    const all=document.querySelectorAll(`[data-k="${CSS.escape(key)}"]`),el=all[idx]||all[0];
     if(el){if(val!==null)el.value=val;el.focus({preventScroll:true});
       /* Talfelter kan ikke få markøren sat med setSelectionRange, og focus() sætter den forrest, så det næste tal lander foran det indtastede. At sætte værdien igen flytter markøren sidst i feltet. */
       if(el.type==="number"){const v=el.value;el.value="";el.value=v}
       else if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}
+  }
+  else if(noteKey){
+    const t=document.querySelector(`textarea[data-note="${CSS.escape(noteKey)}"]`);
+    if(t){t.focus({preventScroll:true});if(noteSel)try{t.setSelectionRange(noteSel[0],noteSel[1])}catch(e){}}
   }
   window.scrollTo(0,sy);
   /* en gammel fane-adresse ruller til sektionen én gang */

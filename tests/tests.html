@@ -559,6 +559,34 @@ test("demo: mindst ét projekt har noter på projekt, antagelse og milepæl, og 
   all.forEach(([,n]) => { ok(n.text && n.at && n.order, "note er udfyldt"); ok(DDP_DEMO.people[n.by], n.by); });
 });
 
+/* Rettelser efter review */
+test("review: fokus bliver i milepælens beslutningspunkt efter gen-rendering", () => {
+  openDemo("#demo-p-demo-retur");
+  const ms = appEl().querySelector("details.ms.next"), sel = ms.querySelector('.gatebox select[data-k$=".status"]');
+  sel.focus(); sel.value = "holder"; sel.dispatchEvent(new Event("change", {bubbles:true}));
+  const a = document.activeElement;
+  ok(a && a.closest("details.ms") && a.closest("details.ms").id === ms.id, "fokus er stadig i milepælen, ikke i Antagelser-sektionen");
+  DDP.setMode("live");
+});
+test("review: noteudkast, åben noteblok og fokus overlever gen-rendering", () => {
+  openDemo("#demo-p-demo-retur");
+  const box = [...appEl().querySelectorAll('details.notes[data-notes^="a."]')].find(d => !d.open); ok(box, "en lukket noteblok findes");
+  box.open = true; const key = box.dataset.notes, ta = box.querySelector("textarea[data-note]");
+  ta.value = "kladde"; ta.focus(); ta.setSelectionRange(3, 3);
+  DDP.render();
+  const box2 = appEl().querySelector(`details.notes[data-notes="${key}"]`), ta2 = box2.querySelector("textarea[data-note]");
+  ok(box2.open, "blokken er stadig åben"); eq(ta2.value, "kladde"); eq(document.activeElement, ta2); eq(ta2.selectionStart, 3);
+  DDP.setMode("live");
+});
+test("review: noteforfatterens navn slås op", async () => {
+  const u = Object.assign({}, fakeUser, {profiles: async ids => ids.includes("u9") ? {u9:{name:"Pia"}} : {}});
+  DDP.setMode("live"); DDP.setUserForTest(u, "Test");
+  window.__snap({docs:[fakeDoc("nn",{name:"NN", notes:{x:{text:"hej", by:"u9", at:1, order:1}}, assumptions:{}, milestones:{}})], size:1, metadata:{fromCache:false}});
+  DDP.readHashFrom("#p-nn"); await tick(); await tick(); DDP.render();
+  ok(appEl().textContent.includes("Pia"), "navnet vises ved noten");
+  DDP.setUserForTest(fakeUser, "Test");
+});
+
 runAll();
 </script>
 </body>
